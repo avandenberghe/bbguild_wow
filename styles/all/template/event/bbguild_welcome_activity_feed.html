@@ -1,0 +1,32 @@
+<!-- WoW activity feed -->
+<ul id="bbguild-activity-feed" >
+	{% if 0 %}
+	{% endif %}
+	{% if loops.activityfeed|length %}
+	{% for activityfeed in loops.activityfeed %}
+	{% if activityfeed.TYPE == 'ITEM' %}
+	<li class="itemlooted">
+		<dl>
+			<dd>
+				<a class="color-blizz" href="javascript:;" onmouseover="$WowheadPower.showTooltip(event, '{{ activityfeed.CHARACTER }}', '')"
+				   onmousemove="$WowheadPower.moveTooltip(event)" onmouseout="$WowheadPower.hideTooltip();">{{ activityfeed.CHARACTER }}</a>
+				{{ activityfeed.VERB }} <a href="http://www.wowhead.com/item={{ activityfeed.ITEM }}">link</a>
+			</dd>
+			<dt>{{ activityfeed.TIMESTAMP }}</dt>
+		</dl>
+	</li>
+	{% elseif activityfeed.TYPE == 'ACHI' %}
+	<li class="achievement">
+		<dl>
+			<dd>
+				<a class="color-blizz" href="javascript:;" onmouseover="$WowheadPower.showTooltip(event, '{{ activityfeed.CHARACTER }}', 'inv_sword_14')"
+				   onmousemove="$WowheadPower.moveTooltip(event)" onmouseout="$WowheadPower.hideTooltip();">{{ activityfeed.CHARACTER }}</a>
+				{{ activityfeed.VERB }}  <a style="color: #FFB100" href="http://www.wowhead.com/achievement={{ activityfeed.ACHIEVEMENT }}">link</a>
+			</dd>
+			<dt>{{ activityfeed.TIMESTAMP }}</dt>
+		</dl>
+	</li>
+	{% endif %}
+	{% endfor %}
+	{% endif %}
+</ul>

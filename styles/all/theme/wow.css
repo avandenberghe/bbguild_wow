@@ -1,0 +1,16 @@
+/* WoW faction-specific CSS */
+.profile-wrapper-alliance {
+    background-image: url("./images/sidebar-bg-alliance.png");
+}
+
+.profile-wrapper-horde {
+    background-image: url("./images/sidebar-bg-horde.png");
+}
+
+.profile-wrapper-alliance .realm, .profile-wrapper-alliance .realm a {
+    color: #0078ff;
+}
+
+.profile-wrapper-horde .realm, .profile-wrapper-horde .realm a {
+    color: #b30000;
+}

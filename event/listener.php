@@ -78,9 +78,10 @@ class listener implements EventSubscriberInterface
 		if ($row)
 		{
 			$this->template->assign_vars(array(
-				'ACHIEV'     => $row['achievementpoints'],
-				'ARMORY'     => $row['guildarmoryurl'],
-				'ARMORY_URL' => $row['guildarmoryurl'],
+				'ACHIEV'              => $row['achievementpoints'],
+				'ARMORY'              => $row['guildarmoryurl'],
+				'ARMORY_URL'          => $row['guildarmoryurl'],
+				'S_DISPLAY_ACHIEVEMENTS' => !empty($row['achievementpoints']),
 			));
 		}
 	}
