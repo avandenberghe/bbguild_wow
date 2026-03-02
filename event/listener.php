@@ -45,8 +45,24 @@ class listener implements EventSubscriberInterface
 	public static function getSubscribedEvents()
 	{
 		return array(
+			'core.user_setup' => 'load_language_on_setup',
 			'core.page_header_after' => 'add_wow_guild_vars',
 		);
+	}
+
+	/**
+	 * Load WoW plugin language file during user setup.
+	 *
+	 * @param \phpbb\event\data $event
+	 */
+	public function load_language_on_setup($event)
+	{
+		$lang_set_ext = $event['lang_set_ext'];
+		$lang_set_ext[] = array(
+			'ext_name' => 'avathar/bbguild_wow',
+			'lang_set' => 'wow',
+		);
+		$event['lang_set_ext'] = $lang_set_ext;
 	}
 
 	/**
