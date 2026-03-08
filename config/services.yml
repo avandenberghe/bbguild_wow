@@ -4,6 +4,11 @@ imports:
 services:
     avathar.bbguild_wow.installer:
         class: avathar\bbguild_wow\game\wow_installer
+        arguments:
+            - '@dbal.conn'
+            - '@cache'
+            - '@config'
+            - '@user'
 
     avathar.bbguild_wow.api:
         class: avathar\bbguild_wow\game\wow_api
