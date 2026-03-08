@@ -77,24 +77,11 @@ class wow_api implements game_api_interface
 	{
 		$slug = mb_strtolower($name, 'UTF-8');
 
-		// Strip apostrophes
+		// Strip apostrophes (e.g. Mal'Ganis → malganis)
 		$slug = str_replace("'", '', $slug);
-
-		// Transliterate accented characters to ASCII
-		if (function_exists('transliterator_transliterate'))
-		{
-			$slug = transliterator_transliterate('Any-Latin; Latin-ASCII', $slug);
-		}
-		else
-		{
-			$slug = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $slug);
-		}
 
 		// Spaces → hyphens
 		$slug = str_replace(' ', '-', $slug);
-
-		// Remove anything that isn't alphanumeric or hyphen
-		$slug = preg_replace('/[^a-z0-9\-]/', '', $slug);
 
 		// Collapse multiple hyphens
 		$slug = preg_replace('/-+/', '-', $slug);
@@ -353,7 +340,10 @@ class wow_api implements game_api_interface
 	 */
 	private function update_wow_roster(array $member_data, int $guild_id, string $region, int $min_level): void
 	{
-		global $user;
+		global $user, $phpbb_container;
+
+		// Ensure the bbguild admin language file is loaded
+		$user->add_lang_ext('avathar/bbguild', 'admin');
 
 		$player_ids = array();
 		$oldplayers = array();
@@ -851,7 +841,15 @@ class wow_api implements game_api_interface
 	{
 		try
 		{
+			$user = $container->get('user');
+			$user->add_lang_ext('avathar/bbguild', 'admin');
+
 			$game = new \avathar\bbguild\model\games\game(
+				$container->get('dbal.conn'),
+				$container->get('cache.driver'),
+				$container->get('config'),
+				$user,
+				$container->get('ext.manager'),
 				$container->getParameter('avathar.bbguild.tables.bb_classes'),
 				$container->getParameter('avathar.bbguild.tables.bb_races'),
 				$container->getParameter('avathar.bbguild.tables.bb_language'),
