@@ -1,0 +1,158 @@
+{% INCLUDE 'overall_header.html' %}
+
+<a href="{{ U_BACK }}" style="float: {{ S_CONTENT_FLOW_END }};">&laquo; {{ lang('BACK') }}</a>
+{% if S_ADD %}
+<h1>{{ lang('ACP_ADDACHIEV') }}</h1>
+{% else %}
+<h1>{{ lang('ACP_MM_EDITACHI') }}</h1>
+{% endif %}
+
+<p>{{ lang('ACHIEVEMENT_ADD_EXPLAIN') }}</p>
+
+<form method="post" action="{{ F_ADD_ACHI }}" id="addachievement" onsubmit="return check_form(this)" >
+
+    <fieldset>
+        <legend>{{ lang('ADD_ACHIEVEMENT') }}</legend>
+
+        <br />
+
+        <dl>
+            <dt><label for="game_id">{{ lang('GAME') }}:</label></dt>
+            <dd>
+                <select id="game_id" name="game_id" class="input" onchange="return GetClassRace(this.value)">
+                    {% for game_row in loops.game_row %}
+                    <option value="{{ game_row.VALUE }}"{{ game_row.SELECTED }}>{{ game_row.OPTION }}</option>
+                    {% endfor %}
+                </select></dd>
+        </dl>
+
+        <dl>
+            <dt><label for="faction_id">{{ lang('FACTION') }}:</label></dt>
+            <dd>
+                <select id="faction_id" name="faction_id" class="input">
+                    {% for faction_row in loops.faction_row %}
+                    <option value="{{ faction_row.VALUE }}"{{ faction_row.SELECTED }}>{{ faction_row.NAME }}</option>
+                    {% endfor %}
+                </select>
+
+            </dd>
+        </dl>
+
+        <dl>
+            <dt><label for="achievement_id">{{ lang('ACHI_ID') }}</label></dt>
+            <dd><input type="text" onkeypress="validate(event)" name="achievement_id" id="achievement_id" size="10" maxlength="10" value="{{ ID }}" class="input" />
+            </dd>
+        </dl>
+
+        <dl>
+            <dt><label for="title">{{ lang('ACHI_TITLE') }}</label></dt>
+            <dd><input type="text" name="title" id="title" size="50" maxlength="50" value="{{ TITLE }}" class="input" />
+            </dd>
+        </dl>
+        <dl>
+            <dt><label for="description">{{ lang('ACHI_DESC') }}</label></dt>
+            <dd><textarea name="description" id="description" rows="3" cols="30" style="width: 100%" class="input">{{ DESCRIPTION }}</textarea></dd>
+        </dl>
+
+
+        <dl>
+            <dt><label for="points">{{ lang('ACHI_POINTS') }}:</label></dt>
+            <dd><input type="text"  onkeypress="validate(event)" name="points" id="points" size="10" maxlength="6" value="{{ POINTS }}" class="input" />
+                <a id="levelup"  href="{{ F_ADD_ACHI }}" target="_blank"><img src="./images/icon_up.gif" /></a>
+                <a id="leveldown" href="{{ F_ADD_ACHI }}" target="_blank"><img src="./images/icon_down.gif" /></a>
+            </dd>
+        </dl>
+
+
+        <dl>
+            <dt><label>{{ lang('ARMORY_URL') }}:</label></dt>
+            <dd>
+                {% if S_ACHIEVEMENT_URL %}
+                <a href="{{ ACHIEVEMENT_URL }}" alt="{{ TITLE }}">
+                {% endif %}
+                </a>
+                <input type="text" name="achievement_url" size="80%" maxlength="300" value="{{ ACHIEVEMENT_URL }}" class="input" />
+                <br/>
+            </dd>
+        </dl>
+
+        <p class="quick">
+            {{ S_FORM_TOKEN }}
+            <input type="hidden" name="hidden_achievement_id" value="{{ ID }}" />
+            {% if S_ADD %}
+            <input type="submit" name="add" value="{{ lang('ADD_ACHIEVEMENT') }}" class="button1" /> <input type="reset" name="reset" value="{{ lang('RESET') }}" class="button1" />
+            {% else %}
+            <input type="submit" name="update" value="{{ lang('UPDATE_ACHIEVEMENT') }}" class="button1" />
+            <input type="submit"  name="delete" value="{{ lang('DELETE_ACHIEVEMENT') }}" class="button1" />
+            {% endif %}
+        </p>
+
+    </fieldset>
+
+</form>
+
+<script type="text/javascript">
+    // <![CDATA[
+    function check_form()
+    {
+
+        var title = document.getElementById('title').value;
+        var achievement_id = document.getElementById('achievement_id').value;
+        var description = document.getElementById('description').value;
+
+        if (title.length < 2)
+        {
+            alert('{{ MSG_TITLE_EMPTY }}');
+            return false;
+        }
+
+        if (achievement_id.length < 1)
+        {
+            alert('{{ MSG_ID_EMPTY }}');
+            return false;
+        }
+
+        if (description.length < 2)
+        {
+            alert('{{ MSG_DESCRIPTION_EMPTY }}');
+            return false;
+        }
+
+        return true;
+    }
+
+    //Wait for the page to load first
+    window.onload = function() {
+        //Get a reference to the link on the page
+        // with an id of "mylink"
+        var levelup = document.getElementById("levelup");
+        var leveldown = document.getElementById("leveldown");
+
+        levelup.onclick = function() {
+            var textBox = document.getElementById("points");
+            textBox.value = String(parseInt(textBox.value) + parseInt("100"));
+            return false;}
+
+        leveldown.onclick = function() {
+            var textBox = document.getElementById("points");
+            textBox.value = String(parseInt(textBox.value) - parseInt("100"));
+            return false;}
+    }
+
+    function validate(evt) {
+        var theEvent = evt || window.event;
+        var key = theEvent.keyCode || theEvent.which;
+        key = String.fromCharCode( key );
+        var regex = /[0-9]|\./;
+        if( !regex.test(key) ) {
+            theEvent.returnValue = false;
+            if(theEvent.preventDefault) theEvent.preventDefault();
+        }
+    }
+
+    // ]]>
+</script>
+
+
+
+{% INCLUDE 'overall_footer.html' %}
