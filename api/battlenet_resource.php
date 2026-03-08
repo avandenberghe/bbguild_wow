@@ -225,7 +225,8 @@ abstract class battlenet_resource
 
 		$requestUri = $this->api_url[$this->region];
 		$requestUri .= $this->endpoint . '/' . $method;
-		$requestUri .= '?locale=' . $this->locale;
+		$requestUri .= '?namespace=' . $this->get_namespace();
+		$requestUri .= '&locale=' . $this->locale;
 
 		if (isset($params['data']) && !empty($params['data']))
 		{

@@ -3,6 +3,7 @@
  * WoW API adapter
  *
  * Implements game_api_interface by wrapping the Battle.net API classes.
+ * Updated for the new Game Data / Profile API (2024+).
  *
  * @package   bbguild_wow v2.0
  * @copyright 2018 avathar.be
@@ -23,6 +24,15 @@ use avathar\bbguild_wow\api\battlenet;
  */
 class wow_api implements game_api_interface
 {
+	/** Cache key for class ID→name map */
+	const CACHE_KEY_CLASSES = 'bbguild_wow_playable_classes';
+
+	/** Cache key for race ID→name map */
+	const CACHE_KEY_RACES = 'bbguild_wow_playable_races';
+
+	/** Cache TTL for static data: 7 days */
+	const STATIC_CACHE_TTL = 604800;
+
 	/** @var \phpbb\cache\service */
 	private $cache;
 
@@ -55,6 +65,44 @@ class wow_api implements game_api_interface
 	}
 
 	/**
+	 * Convert a realm or guild name to a URL slug.
+	 *
+	 * Rules: lowercase, spaces → hyphens, strip apostrophes and accents.
+	 * Examples: "Area 52" → "area-52", "Mal'Ganis" → "malganis"
+	 *
+	 * @param string $name
+	 * @return string
+	 */
+	public function to_slug(string $name): string
+	{
+		$slug = mb_strtolower($name, 'UTF-8');
+
+		// Strip apostrophes
+		$slug = str_replace("'", '', $slug);
+
+		// Transliterate accented characters to ASCII
+		if (function_exists('transliterator_transliterate'))
+		{
+			$slug = transliterator_transliterate('Any-Latin; Latin-ASCII', $slug);
+		}
+		else
+		{
+			$slug = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $slug);
+		}
+
+		// Spaces → hyphens
+		$slug = str_replace(' ', '-', $slug);
+
+		// Remove anything that isn't alphanumeric or hyphen
+		$slug = preg_replace('/[^a-z0-9\-]/', '', $slug);
+
+		// Collapse multiple hyphens
+		$slug = preg_replace('/-+/', '-', $slug);
+
+		return trim($slug, '-');
+	}
+
+	/**
 	 * @inheritdoc
 	 */
 	public function fetch_guild_data(string $guild_name, string $realm, string $region, array $params)
@@ -68,16 +116,39 @@ class wow_api implements game_api_interface
 		}
 
 		$ext_path = $this->get_ext_path($phpbb_container);
+		$realm_slug = $this->to_slug($realm);
+		$name_slug = $this->to_slug($guild_name);
+
+		// Fetch guild profile
 		$api = new battlenet('guild', $region, $game->getApikey(), $game->get_apilocale(), $game->get_privkey(), $ext_path, $this->cache);
-		$data = $api->guild->getGuild($guild_name, $realm, $params);
+		$guild_data = $api->guild->getGuild($realm_slug, $name_slug);
 		unset($api);
 
-		if (isset($data['response']))
+		$result = array();
+		if (isset($guild_data['response']) && is_array($guild_data['response']))
 		{
-			return $data['response'];
+			$result = $guild_data['response'];
 		}
 
-		return $data;
+		// Fetch roster if requested
+		if (in_array('members', $params))
+		{
+			$api = new battlenet('guild', $region, $game->getApikey(), $game->get_apilocale(), $game->get_privkey(), $ext_path, $this->cache);
+			$roster_data = $api->guild->getRoster($realm_slug, $name_slug);
+			unset($api);
+
+			if (isset($roster_data['response']['members']))
+			{
+				$result['members'] = $roster_data['response']['members'];
+			}
+		}
+
+		// Attach metadata for downstream processing
+		$result['_region'] = $region;
+		$result['_realm'] = $realm;
+		$result['_realm_slug'] = $realm_slug;
+
+		return $result;
 	}
 
 	/**
@@ -87,33 +158,45 @@ class wow_api implements game_api_interface
 	{
 		$result = array();
 
-		$result['achievementpoints'] = isset($raw_data['achievementPoints']) ? $raw_data['achievementPoints'] : 0;
-		$result['level'] = isset($raw_data['level']) ? $raw_data['level'] : 0;
-		$result['battlegroup'] = isset($raw_data['battlegroup']) ? $raw_data['battlegroup'] : '';
+		// Achievement points — available in guild profile
+		$result['achievementpoints'] = isset($raw_data['achievement_points']) ? (int) $raw_data['achievement_points'] : 0;
 
-		// Faction mapping: Battle.net side 0 = Alliance (bbGuild faction 1), non-0 = Horde (bbGuild faction 2)
-		$result['faction'] = (isset($raw_data['side']) && $raw_data['side'] == 0) ? 1 : 2;
-		$result['faction_name'] = ($result['faction'] == 1) ? 'Alliance' : 'Horde';
+		// Guild level removed in modern API
+		$result['level'] = 0;
+
+		// Battlegroup removed in modern API
+		$result['battlegroup'] = '';
+
+		// Faction: new API uses faction.type = 'ALLIANCE' or 'HORDE'
+		$result['faction'] = 2; // default Horde
+		$result['faction_name'] = 'Horde';
+		if (isset($raw_data['faction']['type']))
+		{
+			if ($raw_data['faction']['type'] === 'ALLIANCE')
+			{
+				$result['faction'] = 1;
+				$result['faction_name'] = 'Alliance';
+			}
+		}
 
 		// Guild armory URL
 		$result['guildarmoryurl'] = '';
 		if (isset($raw_data['name']))
 		{
 			$region = $raw_data['_region'] ?? '';
-			$realm_slug = strtolower(str_replace(' ', '-', $raw_data['_realm'] ?? ''));
-			$guild_slug = strtolower(str_replace(' ', '-', $raw_data['name']));
-			$result['guildarmoryurl'] = sprintf('https://worldofwarcraft.blizzard.com/en-%s/', $region) . 'guild/' . $region . '/' . $realm_slug . '/' . $guild_slug;
+			$realm_slug = $raw_data['_realm_slug'] ?? $this->to_slug($raw_data['_realm'] ?? '');
+			$guild_slug = $this->to_slug($raw_data['name']);
+			$result['guildarmoryurl'] = sprintf('https://worldofwarcraft.blizzard.com/en-%s/guild/%s/%s/%s', $region, $region, $realm_slug, $guild_slug);
 		}
 
-		// Emblem data — generate emblem image if data available
-		$result['emblem'] = isset($raw_data['emblem']) ? $raw_data['emblem'] : '';
+		// Guild crest emblem
 		$result['emblempath'] = '';
-		if (!empty($result['emblem']))
+		if (isset($raw_data['crest']))
 		{
-			$guild_name = isset($raw_data['name']) ? $raw_data['name'] : '';
-			$realm = $raw_data['_realm'] ?? '';
 			$region = $raw_data['_region'] ?? '';
-			$result['emblempath'] = $this->create_emblem($result['emblem'], $result['faction'], $guild_name, $realm, $region);
+			$guild_name = $raw_data['name'] ?? '';
+			$realm = $raw_data['_realm'] ?? '';
+			$result['emblempath'] = $this->create_emblem($raw_data['crest'], $result['faction'], $guild_name, $realm, $region);
 		}
 
 		// Member data
@@ -137,10 +220,10 @@ class wow_api implements game_api_interface
 		}
 
 		$ext_path = $this->get_ext_path($phpbb_container);
-		$api = new battlenet('character', $region, $game->getApikey(), $game->get_apilocale(), $game->get_privkey(), $ext_path, $this->cache);
-		$params = array('guild', 'titles', 'talents');
+		$realm_slug = $this->to_slug($realm);
 
-		$data = $api->character->getCharacter($name, $realm, $params);
+		$api = new battlenet('character', $region, $game->getApikey(), $game->get_apilocale(), $game->get_privkey(), $ext_path, $this->cache);
+		$data = $api->character->getCharacter($realm_slug, strtolower($name));
 		unset($api);
 
 		if (isset($data['response']))
@@ -156,8 +239,8 @@ class wow_api implements game_api_interface
 	 */
 	public function get_player_armory_url(string $name, string $realm, string $region): string
 	{
-		$realm_slug = strtolower(str_replace(' ', '-', $realm));
-		return sprintf('https://worldofwarcraft.blizzard.com/en-%s/', $region) . 'character/' . $region . '/' . $realm_slug . '/' . rawurlencode(strtolower($name));
+		$realm_slug = $this->to_slug($realm);
+		return sprintf('https://worldofwarcraft.blizzard.com/en-%s/character/%s/%s/%s', $region, $region, $realm_slug, strtolower($name));
 	}
 
 	/**
@@ -165,9 +248,16 @@ class wow_api implements game_api_interface
 	 */
 	public function get_player_portrait_url(array $player_data): string
 	{
-		if (isset($player_data['thumbnail']) && isset($player_data['region']))
+		// New API: character media endpoint provides avatar URLs
+		// For roster sync, portrait URL is constructed from character media
+		if (isset($player_data['realm_slug']) && isset($player_data['name']) && isset($player_data['region']))
 		{
-			return sprintf('https://render.worldofwarcraft.com/character/%s/', $player_data['region']) . $player_data['thumbnail'];
+			return sprintf(
+				'https://render.worldofwarcraft.com/character/%s/%s/%s-avatar.jpg',
+				$player_data['region'],
+				$player_data['realm_slug'],
+				strtolower($player_data['name'])
+			);
 		}
 
 		return '';
@@ -190,9 +280,7 @@ class wow_api implements game_api_interface
 	/**
 	 * Synchronise WoW guild ranks from Battle.net API data.
 	 *
-	 * Creates any ranks that exist in the API data but not yet in the database.
-	 *
-	 * @param array $member_data Raw member array from Battle.net API
+	 * @param array $member_data Raw member array from Battle.net API (new format)
 	 * @param int   $guild_id
 	 */
 	private function sync_wow_ranks(array $member_data, int $guild_id): void
@@ -200,11 +288,12 @@ class wow_api implements game_api_interface
 		$newranks = array();
 		foreach ($member_data as $new)
 		{
-			$newranks[$new['rank']] = 0;
-		}
-		foreach ($member_data as $new)
-		{
-			$newranks[$new['rank']] += 1;
+			$rank = (int) $new['rank'];
+			if (!isset($newranks[$rank]))
+			{
+				$newranks[$rank] = 0;
+			}
+			$newranks[$rank]++;
 		}
 		ksort($newranks);
 
@@ -224,7 +313,6 @@ class wow_api implements game_api_interface
 		$diff = array_diff_key($newranks, $oldranks);
 		foreach ($diff as $rank_id => $count)
 		{
-			// Delete + insert to avoid duplicates
 			$sql = 'DELETE FROM ' . $this->bb_ranks_table . '
 					WHERE rank_id = ' . (int) $rank_id . '
 					AND guild_id = ' . (int) $guild_id;
@@ -245,12 +333,23 @@ class wow_api implements game_api_interface
 	/**
 	 * Update the WoW guild roster from Battle.net API data.
 	 *
-	 * Inserts new players and updates existing ones.
+	 * New API response format per member:
+	 * {
+	 *   "character": {
+	 *     "name": "Arthas",
+	 *     "id": 12345,
+	 *     "realm": { "slug": "area-52", "id": 1566 },
+	 *     "playable_class": { "id": 6 },
+	 *     "playable_race": { "id": 1 },
+	 *     "level": 80
+	 *   },
+	 *   "rank": 0
+	 * }
 	 *
 	 * @param array  $member_data Raw member array from Battle.net API
 	 * @param int    $guild_id
 	 * @param string $region
-	 * @param int    $min_level   Minimum level to import
+	 * @param int    $min_level
 	 */
 	private function update_wow_roster(array $member_data, int $guild_id, string $region, int $min_level): void
 	{
@@ -275,54 +374,49 @@ class wow_api implements game_api_interface
 
 		foreach ($member_data as $mb)
 		{
-			$newplayers[] = $mb['character']['name'] . '-' . $mb['character']['realm'];
+			$char = $mb['character'];
+			$realm_slug = isset($char['realm']['slug']) ? $char['realm']['slug'] : 'unknown';
+			$newplayers[] = $char['name'] . '-' . $realm_slug;
 		}
 
 		$to_add = array_diff($newplayers, $oldplayers);
 
 		$this->db->sql_transaction('begin');
 
-		// Insert new players
 		foreach ($member_data as $mb)
 		{
-			if (in_array($mb['character']['name'] . '-' . $mb['character']['realm'], $to_add) && $mb['character']['level'] >= $min_level)
+			$char = $mb['character'];
+			$realm_slug = isset($char['realm']['slug']) ? $char['realm']['slug'] : 'unknown';
+			$player_key = $char['name'] . '-' . $realm_slug;
+			$level = isset($char['level']) ? (int) $char['level'] : 0;
+
+			if (in_array($player_key, $to_add) && $level >= $min_level)
 			{
-				$realm = isset($mb['character']['realm']) ? $mb['character']['realm'] : 'unknown';
-				$portrait_url = sprintf('https://render.worldofwarcraft.com/character/%s/', $region) . $mb['character']['thumbnail'];
-				$armory_url = sprintf('https://worldofwarcraft.blizzard.com/en-%s/', $region) . 'character/' . $region . '/' . strtolower(str_replace(' ', '-', $realm)) . '/' . strtolower($mb['character']['name']);
-				$title = '';
-				if (isset($mb['titles']))
-				{
-					foreach ($mb['titles'] as $t)
-					{
-						if (isset($t['selected']))
-						{
-							$title = $t['name'];
-						}
-					}
-				}
+				$class_id = isset($char['playable_class']['id']) ? (int) $char['playable_class']['id'] : 0;
+				$race_id = isset($char['playable_race']['id']) ? (int) $char['playable_race']['id'] : 0;
+				$armory_url = $this->get_player_armory_url($char['name'], $realm_slug, $region);
 
 				$query = $this->db->sql_build_array('INSERT', array(
-					'player_name'         => ucwords($mb['character']['name']),
+					'player_name'         => ucwords($char['name']),
 					'player_status'       => 1,
-					'player_level'        => (int) $mb['character']['level'],
-					'player_race_id'      => (int) $mb['character']['race'],
-					'player_class_id'     => (int) $mb['character']['class'],
+					'player_level'        => $level,
+					'player_race_id'      => $race_id,
+					'player_class_id'     => $class_id,
 					'player_rank_id'      => isset($mb['rank']) ? (int) $mb['rank'] : 1,
 					'player_role'         => 'NA',
-					'player_realm'        => $realm,
+					'player_realm'        => $realm_slug,
 					'player_region'       => $region,
-					'player_comment'      => sprintf($user->lang['ADMIN_ADD_PLAYER_SUCCESS'], $mb['character']['name'], date('F j, Y, g:i a')),
+					'player_comment'      => sprintf($user->lang['ADMIN_ADD_PLAYER_SUCCESS'], $char['name'], date('F j, Y, g:i a')),
 					'player_joindate'     => time(),
 					'player_outdate'      => mktime(0, 0, 0, 12, 31, 2030),
 					'player_guild_id'     => (int) $guild_id,
-					'player_gender_id'    => (int) $mb['character']['gender'],
-					'player_achiev'       => (int) $mb['character']['achievementPoints'],
+					'player_gender_id'    => 0,
+					'player_achiev'       => 0,
 					'player_armory_url'   => $armory_url,
 					'phpbb_user_id'       => 0,
 					'game_id'             => 'wow',
-					'player_portrait_url' => (string) $portrait_url,
-					'player_title'        => $title,
+					'player_portrait_url' => '',
+					'player_title'        => '',
 					'last_update'         => time(),
 				));
 				$this->db->sql_query('INSERT INTO ' . $this->bb_players_table . $query);
@@ -333,24 +427,27 @@ class wow_api implements game_api_interface
 		$to_update = array_intersect($newplayers, $oldplayers);
 		foreach ($member_data as $mb)
 		{
-			if (in_array($mb['character']['name'] . '-' . $mb['character']['realm'], $to_update))
+			$char = $mb['character'];
+			$realm_slug = isset($char['realm']['slug']) ? $char['realm']['slug'] : 'unknown';
+			$player_key = $char['name'] . '-' . $realm_slug;
+
+			if (in_array($player_key, $to_update))
 			{
-				$realm = isset($mb['character']['realm']) ? $mb['character']['realm'] : 'unknown';
-				$player_id = (int) $player_ids[bin2hex($mb['character']['name'] . '-' . $mb['character']['realm'])];
+				$player_id = (int) $player_ids[bin2hex($player_key)];
+				$class_id = isset($char['playable_class']['id']) ? (int) $char['playable_class']['id'] : 0;
+				$race_id = isset($char['playable_race']['id']) ? (int) $char['playable_race']['id'] : 0;
 
 				$sql_ary = array(
-					'player_name'         => ucwords($mb['character']['name']),
-					'player_level'        => (int) $mb['character']['level'],
-					'player_race_id'      => (int) $mb['character']['race'],
-					'player_realm'        => $mb['character']['realm'],
+					'player_name'         => ucwords($char['name']),
+					'player_level'        => isset($char['level']) ? (int) $char['level'] : 0,
+					'player_race_id'      => $race_id,
+					'player_realm'        => $realm_slug,
 					'player_region'       => $region,
-					'player_class_id'     => (int) $mb['character']['class'],
+					'player_class_id'     => $class_id,
 					'player_rank_id'      => (int) $mb['rank'],
 					'player_guild_id'     => (int) $guild_id,
-					'player_gender_id'    => (int) $mb['character']['gender'],
-					'player_achiev'       => (int) $mb['character']['achievementPoints'],
-					'player_armory_url'   => sprintf('https://worldofwarcraft.blizzard.com/en-%s/', $region) . 'character/' . $region . '/' . strtolower(str_replace(' ', '-', $realm)) . '/' . strtolower($mb['character']['name']),
-					'player_portrait_url' => sprintf('https://render.worldofwarcraft.com/character/%s/', $region) . $mb['character']['thumbnail'],
+					'player_armory_url'   => $this->get_player_armory_url($char['name'], $realm_slug, $region),
+					'last_update'         => time(),
 				);
 
 				$sql = 'UPDATE ' . $this->bb_players_table . '
@@ -361,6 +458,98 @@ class wow_api implements game_api_interface
 		}
 
 		$this->db->sql_transaction('commit');
+	}
+
+	/**
+	 * Fetch and cache the playable class ID→name map from the API.
+	 *
+	 * @param string $region
+	 * @return array Map of class_id => class_name
+	 */
+	public function get_playable_classes(string $region): array
+	{
+		$cached = $this->cache->get(self::CACHE_KEY_CLASSES . '_' . $region);
+		if ($cached !== false)
+		{
+			return $cached;
+		}
+
+		global $phpbb_container;
+		$game = $this->get_game_from_db($phpbb_container);
+		if (!$game || trim($game->getApikey()) == '')
+		{
+			return array();
+		}
+
+		$ext_path = $this->get_ext_path($phpbb_container);
+		$api = new battlenet('playable-data', $region, $game->getApikey(), $game->get_apilocale(), $game->get_privkey(), $ext_path, $this->cache);
+		$data = $api->static_data->getPlayableClasses();
+		unset($api);
+
+		$map = array();
+		if (isset($data['response']['classes']))
+		{
+			foreach ($data['response']['classes'] as $class)
+			{
+				if (isset($class['id']) && isset($class['name']))
+				{
+					$map[(int) $class['id']] = $class['name'];
+				}
+			}
+		}
+
+		if (!empty($map))
+		{
+			$this->cache->put(self::CACHE_KEY_CLASSES . '_' . $region, $map, self::STATIC_CACHE_TTL);
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Fetch and cache the playable race ID→name map from the API.
+	 *
+	 * @param string $region
+	 * @return array Map of race_id => race_name
+	 */
+	public function get_playable_races(string $region): array
+	{
+		$cached = $this->cache->get(self::CACHE_KEY_RACES . '_' . $region);
+		if ($cached !== false)
+		{
+			return $cached;
+		}
+
+		global $phpbb_container;
+		$game = $this->get_game_from_db($phpbb_container);
+		if (!$game || trim($game->getApikey()) == '')
+		{
+			return array();
+		}
+
+		$ext_path = $this->get_ext_path($phpbb_container);
+		$api = new battlenet('playable-data', $region, $game->getApikey(), $game->get_apilocale(), $game->get_privkey(), $ext_path, $this->cache);
+		$data = $api->static_data->getPlayableRaces();
+		unset($api);
+
+		$map = array();
+		if (isset($data['response']['races']))
+		{
+			foreach ($data['response']['races'] as $race)
+			{
+				if (isset($race['id']) && isset($race['name']))
+				{
+					$map[(int) $race['id']] = $race['name'];
+				}
+			}
+		}
+
+		if (!empty($map))
+		{
+			$this->cache->put(self::CACHE_KEY_RACES . '_' . $region, $map, self::STATIC_CACHE_TTL);
+		}
+
+		return $map;
 	}
 
 	/**
@@ -405,149 +594,251 @@ class wow_api implements game_api_interface
 	}
 
 	/**
-	 * Create a WoW Guild emblem image from Battle.net emblem data.
+	 * Create a WoW Guild emblem image from Battle.net crest data.
 	 *
-	 * Adapted for phpBB from http://us.battle.net/wow/en/forum/topic/3082248497#8
+	 * New API crest format:
+	 * {
+	 *   "emblem":     { "id": 123, "media": { "key": { "href": "..." } }, "color": { "id": 1, "rgba": { "r":255,"g":0,"b":0,"a":1 } } },
+	 *   "border":     { "id": 0,   "media": { "key": { "href": "..." } }, "color": { "id": 1, "rgba": { "r":255,"g":0,"b":0,"a":1 } } },
+	 *   "background": { "color": { "id": 1, "rgba": { "r":0,"g":0,"b":0,"a":1 } } }
+	 * }
 	 *
-	 * @author    Thomas Andersen <acoon@acoon.dk>
-	 * @copyright Copyright (c) 2011, Thomas Andersen, http://sourceforge.net/projects/wowarmoryapi
-	 * @param array  $emblem_data Emblem data array from Battle.net API
-	 * @param int    $faction     Guild faction (1=Alliance, 2=Horde)
-	 * @param string $guild_name  Guild name
-	 * @param string $realm       Realm name
-	 * @param string $region      Region code
-	 * @param int    $width       Output image width
-	 * @return string Path to generated emblem image
+	 * Uses local emblem/border PNGs when available, falls back to API media endpoint.
+	 *
+	 * @param array  $crest      Crest data from guild profile
+	 * @param int    $faction    Guild faction (1=Alliance, 2=Horde)
+	 * @param string $guild_name Guild name
+	 * @param string $realm      Realm name
+	 * @param string $region     Region code
+	 * @param int    $width      Output image width
+	 * @return string Path to generated emblem image, or empty string
 	 */
-	private function create_emblem($emblem_data, $faction, $guild_name, $realm, $region, $width = 175)
+	private function create_emblem(array $crest, int $faction, string $guild_name, string $realm, string $region, int $width = 175): string
 	{
+		if (!isset($crest['emblem']['id']) || !isset($crest['border']['id']))
+		{
+			return '';
+		}
+
 		global $phpbb_container;
 		$ext_path = $this->get_ext_path($phpbb_container);
+		$wow_ext_path = $phpbb_container->get('ext.manager')->get_extension_path('avathar/bbguild_wow', true);
 
-		$safe_name = $this->mb_str_replace(' ', '_', $guild_name);
+		$safe_name = str_replace(' ', '_', $guild_name);
 		$imgfile = $ext_path . 'images/guildemblem/' . $region . '_' . $realm . '_' . $safe_name . '.png';
-		$outputpath = $imgfile;
 
-		if (file_exists($imgfile) and $width == imagesx(imagecreatefrompng($imgfile)) and (filemtime($imgfile) + 86000) > time())
+		// Return cached image if fresh (< 24h)
+		if (file_exists($imgfile) && (filemtime($imgfile) + 86400) > time())
 		{
-			$finalimg = imagecreatefrompng($imgfile);
+			$existing = @imagecreatefrompng($imgfile);
+			if ($existing !== false && imagesx($existing) == $width)
+			{
+				imagedestroy($existing);
+				return $imgfile;
+			}
+			if ($existing !== false)
+			{
+				imagedestroy($existing);
+			}
+		}
+
+		$emblem_id = (int) $crest['emblem']['id'];
+		$border_id = (int) $crest['border']['id'];
+
+		// Load emblem PNG: try local file first, then fetch from API
+		$emblem = $this->load_crest_asset($wow_ext_path, 'emblems', 'emblem', $emblem_id, $region);
+		if ($emblem === false)
+		{
+			return '';
+		}
+
+		// Load border PNG
+		$border = $this->load_crest_asset($wow_ext_path, 'borders', 'border', $border_id, $region);
+		if ($border === false)
+		{
+			imagedestroy($emblem);
+			return '';
+		}
+
+		// Extract RGBA colors
+		$emblem_rgba = $crest['emblem']['color']['rgba'] ?? array('r' => 255, 'g' => 255, 'b' => 255, 'a' => 1);
+		$border_rgba = $crest['border']['color']['rgba'] ?? array('r' => 255, 'g' => 255, 'b' => 255, 'a' => 1);
+		$bg_rgba = $crest['background']['color']['rgba'] ?? array('r' => 0, 'g' => 0, 'b' => 0, 'a' => 1);
+
+		// Apply color overlay to emblem
+		$emblem_size = array(imagesx($emblem), imagesy($emblem));
+		imagelayereffect($emblem, IMG_EFFECT_OVERLAY);
+		imagefilledrectangle($emblem, 0, 0, $emblem_size[0], $emblem_size[1],
+			imagecolorallocatealpha($emblem, $emblem_rgba['r'], $emblem_rgba['g'], $emblem_rgba['b'], 0));
+
+		// Apply color overlay to border
+		$border_size = array(imagesx($border), imagesy($border));
+		imagelayereffect($border, IMG_EFFECT_OVERLAY);
+		imagefilledrectangle($border, 0, 0, $border_size[0], $border_size[1],
+			imagecolorallocatealpha($border, $border_rgba['r'], $border_rgba['g'], $border_rgba['b'], 0));
+
+		// Load static assets (ring, shadow, bg, overlay, hooks)
+		$ring_name = ($faction == 1) ? 'alliance' : 'horde';
+		$ringURL = $wow_ext_path . 'images/wowapi/static/ring-' . $ring_name . '.png';
+		$shadowURL = $wow_ext_path . 'images/wowapi/static/shadow_00.png';
+		$bgURL = $wow_ext_path . 'images/wowapi/static/bg_00.png';
+		$overlayURL = $wow_ext_path . 'images/wowapi/static/overlay_00.png';
+		$hooksURL = $wow_ext_path . 'images/wowapi/static/hooks.png';
+
+		if (!file_exists($ringURL) || !file_exists($shadowURL) || !file_exists($bgURL))
+		{
+			imagedestroy($emblem);
+			imagedestroy($border);
+			return '';
+		}
+
+		$ring = imagecreatefrompng($ringURL);
+		$ring_size = getimagesize($ringURL);
+		$shadow = imagecreatefrompng($shadowURL);
+		$bg = imagecreatefrompng($bgURL);
+		$bg_size = getimagesize($bgURL);
+
+		// Apply background color
+		imagelayereffect($bg, IMG_EFFECT_OVERLAY);
+		imagefilledrectangle($bg, 0, 0, $bg_size[0], $bg_size[1],
+			imagecolorallocatealpha($bg, $bg_rgba['r'], $bg_rgba['g'], $bg_rgba['b'], 0));
+
+		// Composite onto 215x230 canvas
+		$imgOut = imagecreatetruecolor(215, 230);
+		imagesavealpha($imgOut, true);
+		imagealphablending($imgOut, true);
+		$trans = imagecolorallocatealpha($imgOut, 0, 0, 0, 127);
+		imagefill($imgOut, 0, 0, $trans);
+
+		$x = 20;
+		$y = 23;
+
+		imagecopy($imgOut, $ring, 0, 0, 0, 0, $ring_size[0], $ring_size[1]);
+		$shadow_size = getimagesize($shadowURL);
+		imagecopy($imgOut, $shadow, $x, $y, 0, 0, $shadow_size[0], $shadow_size[1]);
+		imagecopy($imgOut, $bg, $x, $y, 0, 0, $bg_size[0], $bg_size[1]);
+		imagecopy($imgOut, $emblem, $x + 17, $y + 30, 0, 0, $emblem_size[0], $emblem_size[1]);
+		imagecopy($imgOut, $border, $x + 13, $y + 15, 0, 0, $border_size[0], $border_size[1]);
+
+		if (file_exists($overlayURL))
+		{
+			$overlay = imagecreatefrompng($overlayURL);
+			$overlay_size = getimagesize($overlayURL);
+			imagecopy($imgOut, $overlay, $x, $y + 2, 0, 0, $overlay_size[0], $overlay_size[1]);
+			imagedestroy($overlay);
+		}
+
+		if (file_exists($hooksURL))
+		{
+			$hooks = imagecreatefrompng($hooksURL);
+			$hooks_size = getimagesize($hooksURL);
+			imagecopy($imgOut, $hooks, $x - 2, $y, 0, 0, $hooks_size[0], $hooks_size[1]);
+			imagedestroy($hooks);
+		}
+
+		// Scale to target width
+		if ($width > 1 && $width < 215)
+		{
+			$height = (int) (($width / 215) * 230);
+			$finalimg = imagecreatetruecolor($width, $height);
+			$trans = imagecolorallocatealpha($finalimg, 0, 0, 0, 127);
+			imagefill($finalimg, 0, 0, $trans);
 			imagesavealpha($finalimg, true);
 			imagealphablending($finalimg, true);
+			imagecopyresampled($finalimg, $imgOut, 0, 0, 0, 0, $width, $height, 215, 230);
+			imagedestroy($imgOut);
 		}
 		else
 		{
-			if ($width > 1 and $width < 215)
-			{
-				$height = ($width / 215) * 230;
-				$finalimg = imagecreatetruecolor($width, $height);
-				$trans_colour = imagecolorallocatealpha($finalimg, 0, 0, 0, 127);
-				imagefill($finalimg, 0, 0, $trans_colour);
-				imagesavealpha($finalimg, true);
-				imagealphablending($finalimg, true);
-			}
-
-			$ring_name = ($faction == 1) ? 'alliance' : 'horde';
-
-			$imgOut = imagecreatetruecolor(215, 230);
-
-			$emblemURL = $ext_path . 'images/wowapi/emblems/emblem_' . sprintf('%02s', $emblem_data['icon']) . '.png';
-			$borderURL = $ext_path . 'images/wowapi/borders/border_' . sprintf('%02s', $emblem_data['border']) . '.png';
-			$ringURL = $ext_path . 'images/wowapi/static/ring-' . $ring_name . '.png';
-			$shadowURL = $ext_path . 'images/wowapi/static/shadow_00.png';
-			$bgURL = $ext_path . 'images/wowapi/static/bg_00.png';
-			$overlayURL = $ext_path . 'images/wowapi/static/overlay_00.png';
-			$hooksURL = $ext_path . 'images/wowapi/static/hooks.png';
-
-			imagesavealpha($imgOut, true);
-			imagealphablending($imgOut, true);
-			$trans_colour = imagecolorallocatealpha($imgOut, 0, 0, 0, 127);
-			imagefill($imgOut, 0, 0, $trans_colour);
-
-			$ring = imagecreatefrompng($ringURL);
-			$ring_size = getimagesize($ringURL);
-
-			$emblem = imagecreatefrompng($emblemURL);
-			$emblem_size = getimagesize($emblemURL);
-			imagelayereffect($emblem, IMG_EFFECT_OVERLAY);
-			$emblemcolor = preg_replace('/^ff/i', '', $emblem_data['iconColor']);
-			$color_r = hexdec(substr($emblemcolor, 0, 2));
-			$color_g = hexdec(substr($emblemcolor, 2, 2));
-			$color_b = hexdec(substr($emblemcolor, 4, 2));
-			imagefilledrectangle($emblem, 0, 0, $emblem_size[0], $emblem_size[1], imagecolorallocatealpha($emblem, $color_r, $color_g, $color_b, 0));
-
-			$border = imagecreatefrompng($borderURL);
-			$border_size = getimagesize($borderURL);
-			imagelayereffect($border, IMG_EFFECT_OVERLAY);
-			$bordercolor = preg_replace('/^ff/i', '', $emblem_data['borderColor']);
-			$color_r = hexdec(substr($bordercolor, 0, 2));
-			$color_g = hexdec(substr($bordercolor, 2, 2));
-			$color_b = hexdec(substr($bordercolor, 4, 2));
-			imagefilledrectangle($border, 0, 0, $border_size[0] + 100, $border_size[0] + 100, imagecolorallocatealpha($border, $color_r, $color_g, $color_b, 0));
-
-			$shadow = imagecreatefrompng($shadowURL);
-
-			$bg = imagecreatefrompng($bgURL);
-			$bg_size = getimagesize($bgURL);
-			imagelayereffect($bg, IMG_EFFECT_OVERLAY);
-			$bgcolor = preg_replace('/^ff/i', '', $emblem_data['backgroundColor']);
-			$color_r = hexdec(substr($bgcolor, 0, 2));
-			$color_g = hexdec(substr($bgcolor, 2, 2));
-			$color_b = hexdec(substr($bgcolor, 4, 2));
-			imagefilledrectangle($bg, 0, 0, $bg_size[0] + 100, $bg_size[0] + 100, imagecolorallocatealpha($bg, $color_r, $color_g, $color_b, 0));
-
-			$overlay = imagecreatefrompng($overlayURL);
-			$hooks = imagecreatefrompng($hooksURL);
-
-			$x = 20;
-			$y = 23;
-
-			imagecopy($imgOut, $ring, 0, 0, 0, 0, $ring_size[0], $ring_size[1]);
-
-			$size = getimagesize($shadowURL);
-			imagecopy($imgOut, $shadow, $x, $y, 0, 0, $size[0], $size[1]);
-			imagecopy($imgOut, $bg, $x, $y, 0, 0, $bg_size[0], $bg_size[1]);
-			imagecopy($imgOut, $emblem, $x + 17, $y + 30, 0, 0, $emblem_size[0], $emblem_size[1]);
-			imagecopy($imgOut, $border, $x + 13, $y + 15, 0, 0, $border_size[0], $border_size[1]);
-			$size = getimagesize($overlayURL);
-			imagecopy($imgOut, $overlay, $x, $y + 2, 0, 0, $size[0], $size[1]);
-			$size = getimagesize($hooksURL);
-			imagecopy($imgOut, $hooks, $x - 2, $y, 0, 0, $size[0], $size[1]);
-
-			if ($width > 1 and $width < 215)
-			{
-				imagecopyresampled($finalimg, $imgOut, 0, 0, 0, 0, $width, $height, 215, 230);
-			}
-			else
-			{
-				$finalimg = $imgOut;
-			}
-
-			imagepng($finalimg, $imgfile);
+			$finalimg = $imgOut;
 		}
 
-		return $outputpath;
+		imagepng($finalimg, $imgfile);
+
+		imagedestroy($finalimg);
+		imagedestroy($emblem);
+		imagedestroy($border);
+		imagedestroy($ring);
+		imagedestroy($shadow);
+		imagedestroy($bg);
+
+		return $imgfile;
 	}
 
 	/**
-	 * Replace string in UTF-8 string.
+	 * Load a crest asset PNG (emblem or border).
 	 *
-	 * @param string $needle
-	 * @param string $replacement
-	 * @param string $haystack
-	 * @return string
+	 * Tries the local file first (images/wowapi/{dir}/{type}_{id}.png),
+	 * falls back to fetching the render URL from the API media endpoint
+	 * and downloading the image.
+	 *
+	 * @param string $wow_ext_path Path to bbguild_wow extension
+	 * @param string $dir          Local subdirectory ('emblems' or 'borders')
+	 * @param string $type         Asset type ('emblem' or 'border')
+	 * @param int    $id           Asset ID
+	 * @param string $region       API region
+	 * @return resource|false GD image resource, or false on failure
 	 */
-	private function mb_str_replace($needle, $replacement, $haystack)
+	private function load_crest_asset(string $wow_ext_path, string $dir, string $type, int $id, string $region)
 	{
-		$needle_len = mb_strlen($needle);
-		$pos = mb_strpos($haystack, $needle);
-		while (!($pos === false))
+		// Try local file first
+		$local_path = $wow_ext_path . 'images/wowapi/' . $dir . '/' . $type . '_' . sprintf('%02d', $id) . '.png';
+		if (file_exists($local_path))
 		{
-			$front = mb_substr($haystack, 0, $pos);
-			$back = mb_substr($haystack, $pos + $needle_len);
-			$haystack = $front . $replacement . $back;
-			$pos = mb_strpos($haystack, $needle);
+			return imagecreatefrompng($local_path);
 		}
-		return $haystack;
+
+		// Fetch render URL from API media endpoint
+		global $phpbb_container;
+		$game = $this->get_game_from_db($phpbb_container);
+		if (!$game || trim($game->getApikey()) == '')
+		{
+			return false;
+		}
+
+		$ext_path = $this->get_ext_path($phpbb_container);
+		$api = new battlenet('playable-data', $region, $game->getApikey(), $game->get_apilocale(), $game->get_privkey(), $ext_path, $this->cache);
+
+		$data = ($type === 'emblem')
+			? $api->static_data->getEmblemMedia($id)
+			: $api->static_data->getBorderMedia($id);
+		unset($api);
+
+		if (!isset($data['response']['assets'][0]['value']))
+		{
+			return false;
+		}
+
+		$image_url = $data['response']['assets'][0]['value'];
+
+		// Download the image
+		$curl = curl_init($image_url);
+		if ($curl === false)
+		{
+			return false;
+		}
+
+		curl_setopt_array($curl, array(
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_TIMEOUT        => 30,
+			CURLOPT_FOLLOWLOCATION => true,
+			CURLOPT_USERAGENT      => 'bbGuild/2.0 (phpBB)',
+		));
+
+		$image_data = curl_exec($curl);
+		$http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+		curl_close($curl);
+
+		if ($image_data === false || $http_code !== 200)
+		{
+			return false;
+		}
+
+		// Save locally for future use
+		@file_put_contents($local_path, $image_data);
+
+		$img = @imagecreatefromstring($image_data);
+		return ($img !== false) ? $img : false;
 	}
 
 	/**

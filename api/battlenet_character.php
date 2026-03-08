@@ -2,6 +2,9 @@
 /**
  * Battle.net WoW Character API
  *
+ * Uses the Profile API endpoint:
+ * - Character profile: GET /profile/wow/character/{realmSlug}/{characterName}
+ *
  * @package   bbguild_wow v2.0
  * @license   http://opensource.org/licenses/gpl-2.0.php GNU General Public License v2
  * @author    Andreas Vandenberghe <sajaki@avathar.be>
@@ -23,70 +26,30 @@ class battlenet_character extends battlenet_resource
 	/** @var array */
 	protected $methods_allowed = array('*');
 
-	/** @var array */
-	private $extrafields = array(
-		'achievements', 'appearance', 'feed', 'guild', 'hunterPets',
-		'items', 'mounts', 'pets', 'petSlots', 'professions', 'progression',
-		'pvp', 'reputation', 'stats', 'talents', 'titles',
-	);
-
 	/** @var string */
-	protected $endpoint = 'character';
+	protected $endpoint = 'profile/wow/character';
 
 	/**
+	 * Fetch character profile summary.
+	 *
+	 * @param string $realm_slug     Lowercase hyphenated realm slug
+	 * @param string $character_name Lowercase character name
 	 * @return array
 	 */
-	public function getFields()
-	{
-		return $this->extrafields;
-	}
-
-	/**
-	 * Fetch character results
-	 *
-	 * @param  string $name
-	 * @param  string $realm
-	 * @param  array  $fields
-	 * @return mixed
-	 */
-	public function getCharacter($name = '', $realm = '', $fields = array())
+	public function getCharacter(string $realm_slug, string $character_name): array
 	{
 		global $user;
 
-		if ($name == '')
+		if ($character_name === '')
 		{
 			trigger_error($user->lang['WOWAPI_NO_CHARACTER']);
 		}
 
-		$name = rawurlencode($name);
-		if ($realm == '')
+		if ($realm_slug === '')
 		{
 			trigger_error($user->lang['WOWAPI_NO_REALMS']);
 		}
 
-		$realm = rawurlencode($realm);
-
-		$field_str = '';
-		if (is_array($fields) && count($fields) > 0)
-		{
-			$field_str = 'fields=' . implode(',', $fields);
-			$keys = $this->getFields();
-			if (count(array_intersect($fields, $keys)) == 0)
-			{
-				trigger_error(sprintf($user->lang['WOWAPI_INVALID_FIELD'], $field_str));
-			}
-
-			$data = $this->consume(
-				$realm . '/' . $name, array(
-					'data' => $field_str,
-				)
-			);
-		}
-		else
-		{
-			$data = $this->consume($realm . '/' . $name, $fields);
-		}
-
-		return $data;
+		return $this->consume($realm_slug . '/' . strtolower($character_name), array());
 	}
 }

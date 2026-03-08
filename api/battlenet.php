@@ -29,7 +29,7 @@ class battlenet
 	protected $region = array('us', 'eu', 'kr', 'tw');
 
 	/** @var array */
-	protected $api = array('guild', 'realm', 'character', 'achievement');
+	protected $api = array('guild', 'realm', 'character', 'achievement', 'playable-data');
 
 	/** @var battlenet_realm */
 	public $Realm;
@@ -42,6 +42,9 @@ class battlenet
 
 	/** @var battlenet_character */
 	public $character;
+
+	/** @var battlenet_static_data */
+	public $static_data;
 
 	/** @var string */
 	public $locale;
@@ -57,10 +60,11 @@ class battlenet
 	 * @see https://develop.battle.net/documentation/guides/using-oauth
 	 */
 	private $namespace_types = array(
-		'realm'       => 'dynamic',
-		'guild'       => 'profile',
-		'character'   => 'profile',
-		'achievement' => 'static',
+		'realm'          => 'dynamic',
+		'guild'          => 'profile',
+		'character'      => 'profile',
+		'achievement'    => 'static',
+		'playable-data'  => 'static',
 	);
 
 	/**
@@ -124,6 +128,13 @@ class battlenet
 				$this->achievement->locale = $locale;
 				$this->achievement->privkey = $privkey;
 				$this->achievement->namespace_type = $namespace_type;
+				break;
+			case 'playable-data':
+				$this->static_data = new battlenet_static_data($this->cache, $region, $this->cacheTtl);
+				$this->static_data->apikey = $apikey;
+				$this->static_data->locale = $locale;
+				$this->static_data->privkey = $privkey;
+				$this->static_data->namespace_type = $namespace_type;
 				break;
 		}
 	}

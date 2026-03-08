@@ -2,6 +2,10 @@
 /**
  * Battle.net WoW Guild API
  *
+ * Uses the Game Data API endpoints:
+ * - Guild data:   GET /data/wow/guild/{realmSlug}/{nameSlug}
+ * - Guild roster:  GET /data/wow/guild/{realmSlug}/{nameSlug}/roster
+ *
  * @package   bbguild_wow v2.0
  * @license   http://opensource.org/licenses/gpl-2.0.php GNU General Public License v2
  * @author    Andreas Vandenberghe <sajaki@avathar.be>
@@ -23,65 +27,54 @@ class battlenet_guild extends battlenet_resource
 	/** @var array */
 	protected $methods_allowed = array('*');
 
-	/** @var array */
-	private $extrafields = array('members', 'achievements', 'news');
-
 	/** @var string */
-	protected $endpoint = 'guild';
+	protected $endpoint = 'data/wow/guild';
 
 	/**
+	 * Fetch guild profile data.
+	 *
+	 * @param string $realm_slug Lowercase hyphenated realm slug
+	 * @param string $name_slug  Lowercase hyphenated guild name slug
 	 * @return array
 	 */
-	public function getFields()
-	{
-		return $this->extrafields;
-	}
-
-	/**
-	 * Fetch guild results
-	 *
-	 * @param  string $name
-	 * @param  string $realm
-	 * @param  array  $fields
-	 * @return mixed
-	 */
-	public function getGuild($name = '', $realm = '', $fields = array())
+	public function getGuild(string $realm_slug, string $name_slug): array
 	{
 		global $user;
 
-		if ($name == '')
+		if ($name_slug === '')
 		{
 			trigger_error($user->lang['WOWAPI_NO_GUILD']);
 		}
 
-		if ($realm == '')
+		if ($realm_slug === '')
 		{
 			trigger_error($user->lang['WOWAPI_NO_REALMS']);
 		}
 
-		$realm = str_replace(' ', '%20', $realm);
-		$name = str_replace(' ', '%20', $name);
+		return $this->consume($realm_slug . '/' . $name_slug, array());
+	}
 
-		if (is_array($fields) && count($fields) > 0)
-		{
-			$field_str = 'fields=' . implode(',', $fields);
-			$keys = $this->getFields();
-			if (count(array_intersect($fields, $keys)) == 0)
-			{
-				trigger_error(sprintf($user->lang['WOWAPI_INVALID_FIELD'], $field_str));
-			}
+	/**
+	 * Fetch guild roster.
+	 *
+	 * @param string $realm_slug Lowercase hyphenated realm slug
+	 * @param string $name_slug  Lowercase hyphenated guild name slug
+	 * @return array
+	 */
+	public function getRoster(string $realm_slug, string $name_slug): array
+	{
+		global $user;
 
-			$data = $this->consume(
-				$realm . '/' . $name, array(
-					'data' => $field_str,
-				)
-			);
-		}
-		else
+		if ($name_slug === '')
 		{
-			$data = $this->consume($realm . '/' . $name, $fields);
+			trigger_error($user->lang['WOWAPI_NO_GUILD']);
 		}
 
-		return $data;
+		if ($realm_slug === '')
+		{
+			trigger_error($user->lang['WOWAPI_NO_REALMS']);
+		}
+
+		return $this->consume($realm_slug . '/' . $name_slug . '/roster', array());
 	}
 }
