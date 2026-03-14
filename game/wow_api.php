@@ -329,6 +329,14 @@ class wow_api implements game_api_interface
 				$errors[$error_code][] = $player['player_name'];
 				$failed++;
 
+				// Mark as unavailable so this player is not retried next batch
+				if ($http_code === 404)
+				{
+					$db->sql_query('UPDATE ' . $this->bb_players_table .
+						" SET player_portrait_url = 'N/A'" .
+						' WHERE player_id = ' . (int) $player['player_id']);
+				}
+
 				// Stop batch early on server errors (5xx) — API is likely down
 				if ($http_code >= 500)
 				{
@@ -461,6 +469,14 @@ class wow_api implements game_api_interface
 				$errors[$error_code][] = $player['player_name'];
 				$failed++;
 
+				// Mark as unavailable so this player is not retried next batch
+				if ($http_code === 404)
+				{
+					$db->sql_query('UPDATE ' . $this->bb_players_table .
+						" SET player_spec = 'N/A'" .
+						' WHERE player_id = ' . (int) $player['player_id']);
+				}
+
 				// Stop batch early on server errors (5xx) — API is likely down
 				if ($http_code >= 500)
 				{
@@ -475,19 +491,20 @@ class wow_api implements game_api_interface
 				$spec_name = $data['active_specialization']['name'];
 			}
 
-			$db->sql_query('UPDATE ' . $this->bb_players_table .
-				" SET player_spec = '" . $db->sql_escape($spec_name) . "'" .
-				' WHERE player_id = ' . (int) $player['player_id']);
-
-			if (!empty($spec_name))
+			if (empty($spec_name))
 			{
-				$fetched++;
-			}
-			else
-			{
+				$spec_name = 'N/A';
 				$errors['no_spec'][] = $player['player_name'];
 				$failed++;
 			}
+			else
+			{
+				$fetched++;
+			}
+
+			$db->sql_query('UPDATE ' . $this->bb_players_table .
+				" SET player_spec = '" . $db->sql_escape($spec_name) . "'" .
+				' WHERE player_id = ' . (int) $player['player_id']);
 		}
 
 		unset($api);
