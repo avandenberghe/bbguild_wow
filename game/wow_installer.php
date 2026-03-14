@@ -50,20 +50,20 @@ class wow_installer extends abstract_game_install
 		// classes (note class 10 does not exist)
 		$this->db->sql_query('DELETE FROM ' . $this->table('bb_classes_table') . " WHERE game_id = '" . $this->db->sql_escape($this->game_id) . "'");
 		$sql_ary = array();
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 0,  'class_armor_type' => 'PLATE',   'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#999',    'imagename' => 'wow_unknown');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 1,  'class_armor_type' => 'PLATE',   'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#c69b6d', 'imagename' => 'wow_warrior');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 4,  'class_armor_type' => 'LEATHER', 'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#fff468', 'imagename' => 'wow_rogue');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 3,  'class_armor_type' => 'MAIL',    'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#aad372', 'imagename' => 'wow_hunter');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 2,  'class_armor_type' => 'PLATE',   'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#f48cba', 'imagename' => 'wow_paladin');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 7,  'class_armor_type' => 'MAIL',    'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#2359ff', 'imagename' => 'wow_shaman');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 11, 'class_armor_type' => 'LEATHER', 'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#ff7c0a', 'imagename' => 'wow_druid');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 9,  'class_armor_type' => 'CLOTH',   'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#9382c9', 'imagename' => 'wow_warlock');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 8,  'class_armor_type' => 'CLOTH',   'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#68ccef', 'imagename' => 'wow_mage');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 5,  'class_armor_type' => 'CLOTH',   'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#f0ebe0', 'imagename' => 'wow_priest');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 6,  'class_armor_type' => 'PLATE',   'class_min_level' => 8, 'class_max_level' => 80, 'colorcode' => '#c41e3b', 'imagename' => 'wow_death_knight');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 10, 'class_armor_type' => 'LEATHER', 'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#00ffba', 'imagename' => 'wow_monk');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 12, 'class_armor_type' => 'LEATHER', 'class_min_level' => 8, 'class_max_level' => 80, 'colorcode' => '#A330C3', 'imagename' => 'wow_demon_hunter');
-		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 13, 'class_armor_type' => 'MAIL',    'class_min_level' => 1, 'class_max_level' => 80, 'colorcode' => '#33937F', 'imagename' => 'wow_evoker');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 0,  'class_armor_type' => 'PLATE',   'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#999',    'imagename' => 'wow_unknown');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 1,  'class_armor_type' => 'PLATE',   'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#c69b6d', 'imagename' => 'wow_warrior');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 4,  'class_armor_type' => 'LEATHER', 'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#fff468', 'imagename' => 'wow_rogue');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 3,  'class_armor_type' => 'MAIL',    'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#aad372', 'imagename' => 'wow_hunter');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 2,  'class_armor_type' => 'PLATE',   'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#f48cba', 'imagename' => 'wow_paladin');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 7,  'class_armor_type' => 'MAIL',    'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#2359ff', 'imagename' => 'wow_shaman');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 11, 'class_armor_type' => 'LEATHER', 'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#ff7c0a', 'imagename' => 'wow_druid');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 9,  'class_armor_type' => 'CLOTH',   'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#9382c9', 'imagename' => 'wow_warlock');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 8,  'class_armor_type' => 'CLOTH',   'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#68ccef', 'imagename' => 'wow_mage');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 5,  'class_armor_type' => 'CLOTH',   'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#f0ebe0', 'imagename' => 'wow_priest');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 6,  'class_armor_type' => 'PLATE',   'class_min_level' => 8, 'class_max_level' => 90, 'colorcode' => '#c41e3b', 'imagename' => 'wow_death_knight');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 10, 'class_armor_type' => 'LEATHER', 'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#00ffba', 'imagename' => 'wow_monk');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 12, 'class_armor_type' => 'LEATHER', 'class_min_level' => 8, 'class_max_level' => 90, 'colorcode' => '#A330C3', 'imagename' => 'wow_demon_hunter');
+		$sql_ary[] = array('game_id' => $this->game_id, 'class_id' => 13, 'class_armor_type' => 'MAIL',    'class_min_level' => 1, 'class_max_level' => 90, 'colorcode' => '#33937F', 'imagename' => 'wow_evoker');
 		$this->db->sql_multi_insert($this->table('bb_classes_table'), $sql_ary);
 		unset($sql_ary);
 
