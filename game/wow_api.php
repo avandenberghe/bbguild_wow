@@ -922,12 +922,21 @@ class wow_api implements game_api_interface
 			return '';
 		}
 
-		global $phpbb_container;
-		$ext_path = $this->get_ext_path($phpbb_container);
+		global $phpbb_root_path, $phpbb_container;
 		$wow_ext_path = $phpbb_container->get('ext.manager')->get_extension_path('avathar/bbguild_wow', true);
 
+		// Store emblems in phpBB's upload directory (files/bbguild_wow/emblems/)
+		$upload_path = $phpbb_container->get('config')['upload_path'];
+		$emblem_rel = $upload_path . '/bbguild_wow/emblems/';
+		$emblem_dir = $phpbb_root_path . $emblem_rel;
+		if (!is_dir($emblem_dir))
+		{
+			@mkdir($emblem_dir, 0755, true);
+		}
+
 		$safe_name = str_replace(' ', '_', $guild_name);
-		$imgfile = $ext_path . 'images/guildemblem/' . $region . '_' . $realm . '_' . $safe_name . '.png';
+		$filename = $region . '_' . $realm . '_' . $safe_name . '.png';
+		$imgfile = $emblem_dir . $filename;
 
 		// Return cached image if fresh (< 24h)
 		if (file_exists($imgfile) && (filemtime($imgfile) + 86400) > time())
@@ -936,7 +945,7 @@ class wow_api implements game_api_interface
 			if ($existing !== false && imagesx($existing) == $width)
 			{
 				imagedestroy($existing);
-				return $imgfile;
+				return $emblem_rel . $filename;
 			}
 			if ($existing !== false)
 			{
@@ -1064,7 +1073,7 @@ class wow_api implements game_api_interface
 		imagedestroy($shadow);
 		imagedestroy($bg);
 
-		return $imgfile;
+		return $emblem_rel . $filename;
 	}
 
 	/**
