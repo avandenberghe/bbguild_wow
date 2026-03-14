@@ -133,6 +133,8 @@ class achievement_controller
 		$result = $db->sql_query($sql);
 
 		$achievements = array();
+		$earned_points = 0;
+		$completed_count = 0;
 		while ($row = $db->sql_fetchrow($result))
 		{
 			$completed = (int) $row['achievements_completed'];
@@ -144,6 +146,8 @@ class achievement_controller
 					$completed = (int) ($completed / 1000);
 				}
 				$completed_date = date('d/m/Y', $completed);
+				$earned_points += (int) $row['points'];
+				$completed_count++;
 			}
 
 			$achievements[] = array(
@@ -159,8 +163,11 @@ class achievement_controller
 		$db->sql_freeresult($result);
 
 		return new JsonResponse(array(
-			'category_name' => $category_name,
-			'achievements'  => $achievements,
+			'category_name'   => $category_name,
+			'achievements'    => $achievements,
+			'completed_count' => $completed_count,
+			'total_count'     => count($achievements),
+			'earned_points'   => $earned_points,
 		));
 	}
 

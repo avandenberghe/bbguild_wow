@@ -76,31 +76,28 @@ class achievements extends module_base
 			return null;
 		}
 
-		// Check if this guild has achievement points
+		// Load guild achievement points from Blizzard API (authoritative)
 		$sql = 'SELECT achievementpoints FROM ' . $this->guild_wow_table .
 			' WHERE guild_id = ' . (int) $this->guild_id;
 		$result = $this->db->sql_query($sql);
-		$row = $this->db->sql_fetchrow($result);
+		$achiev_points = (int) ($this->db->sql_fetchfield('achievementpoints') ?? 0);
 		$this->db->sql_freeresult($result);
 
-		if (!$row || empty($row['achievementpoints']))
-		{
-			return null;
-		}
-
-		$this->template->assign_var('ACHIEV_POINTS', (int) $row['achievementpoints']);
-
-		// Load overall progress
-		$this->load_overall_progress();
+		$this->template->assign_var('ACHIEV_POINTS', $achiev_points);
 
 		// Load category progress for the card grid
 		$categories = $this->achievement_model->getCategoryProgress((int) $this->guild_id);
+
+		$hide_empty = (int) $this->config['bbguild_achiev_hide_empty'];
+
+		$sum_completed = 0;
+		$sum_total = 0;
 
 		if (!empty($categories))
 		{
 			foreach ($categories as $cat)
 			{
-				$percent = ($cat['total_points'] > 0) ? round($cat['earned_points'] / $cat['total_points'] * 100) : 0;
+				$percent = ($cat['total_count'] > 0) ? round($cat['completed_count'] / $cat['total_count'] * 100) : 0;
 				$this->template->assign_block_vars('achievement_categories', array(
 					'ID'              => $cat['id'],
 					'NAME'            => $cat['name'],
@@ -109,9 +106,20 @@ class achievements extends module_base
 					'PERCENT'         => $percent,
 					'COMPLETED_COUNT' => $cat['completed_count'],
 					'TOTAL_COUNT'     => $cat['total_count'],
+					'S_EMPTY'         => ($cat['completed_count'] == 0),
 				));
+				if (!$hide_empty || $cat['completed_count'] > 0)
+				{
+					$sum_completed += $cat['completed_count'];
+					$sum_total += $cat['total_count'];
+				}
 			}
 		}
+
+		$this->template->assign_vars(array(
+			'ACHIEV_COMPLETED'   => $sum_completed,
+			'ACHIEV_TOTAL_COUNT' => $sum_total,
+		));
 
 		// Assign AJAX route base URLs for JS
 		// Use generate_board_url() to build absolute paths that work regardless of current page URL
@@ -121,6 +129,7 @@ class achievements extends module_base
 			'U_ACHIEV_LIST_BASE'      => $board_url . '/app.php/bbguild_wow/achievements/list/' . (int) $this->guild_id . '/',
 			'U_ACHIEV_DETAIL_BASE'    => $board_url . '/app.php/bbguild_wow/achievements/detail/' . (int) $this->guild_id . '/',
 			'S_ACHIEV_HAS_CATEGORIES' => !empty($categories),
+			'S_ACHIEV_HIDE_EMPTY'     => $hide_empty,
 		));
 
 		// Fetch recently earned achievements
@@ -131,26 +140,44 @@ class achievements extends module_base
 
 	/**
 	 * Load overall achievement progress for this guild.
+	 *
+	 * Uses achievementpoints from guild_wow table (Blizzard's authoritative
+	 * guild-level total) for points display. The achievement detail table
+	 * stores character-level point values which differ from guild-level.
 	 */
 	protected function load_overall_progress(): void
 	{
-		$sql = 'SELECT COUNT(at.achievement_id) AS completed_count,
-				SUM(a.points) AS earned_points
+		// Completed count — only achievements with a completion timestamp
+		$sql = 'SELECT COUNT(at.achievement_id) AS completed_count
 			FROM ' . $this->achievement_track_table . ' at
 			INNER JOIN ' . $this->achievement_table . ' a
 				ON a.id = at.achievement_id
 			WHERE at.guild_id = ' . (int) $this->guild_id . '
-				AND a.game_id = \'wow\'';
+				AND a.game_id = \'wow\'
+				AND at.achievements_completed > 0';
 		$result = $this->db->sql_query($sql);
-		$row = $this->db->sql_fetchrow($result);
+		$completed = (int) ($this->db->sql_fetchfield('completed_count') ?? 0);
 		$this->db->sql_freeresult($result);
 
-		$completed = (int) ($row['completed_count'] ?? 0);
-		$earned = (int) ($row['earned_points'] ?? 0);
+		// Total achievements in catalog
+		$sql = 'SELECT COUNT(*) AS total_count
+			FROM ' . $this->achievement_table . '
+			WHERE game_id = \'wow\'';
+		$result = $this->db->sql_query($sql);
+		$total_count = (int) ($this->db->sql_fetchfield('total_count') ?? 0);
+		$this->db->sql_freeresult($result);
+
+		// Guild-level achievement points from Blizzard API (authoritative)
+		$sql = 'SELECT achievementpoints FROM ' . $this->guild_wow_table .
+			' WHERE guild_id = ' . (int) $this->guild_id;
+		$result = $this->db->sql_query($sql);
+		$achiev_points = (int) ($this->db->sql_fetchfield('achievementpoints') ?? 0);
+		$this->db->sql_freeresult($result);
 
 		$this->template->assign_vars(array(
-			'ACHIEV_COMPLETED' => $completed,
-			'ACHIEV_EARNED'    => $earned,
+			'ACHIEV_COMPLETED'   => $completed,
+			'ACHIEV_TOTAL_COUNT' => $total_count,
+			'ACHIEV_POINTS'      => $achiev_points,
 		));
 	}
 

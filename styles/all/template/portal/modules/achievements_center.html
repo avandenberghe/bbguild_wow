@@ -7,12 +7,11 @@
 			<div class="achievements-total-completed">
 				<div class="desc">{{ lang('ACHIEV_TOTAL_COMPLETED') }}</div>
 				<div class="profile-progress border-4">
-					<div class="bar border-4 hover" style="width: {% if ACHIEV_POINTS > 0 %}{{ (ACHIEV_EARNED / ACHIEV_POINTS * 100)|round }}{% else %}0{% endif %}%"></div>
+					<div class="bar border-4 hover" style="width: {% if ACHIEV_TOTAL_COUNT > 0 %}{{ min(100, (ACHIEV_COMPLETED / ACHIEV_TOTAL_COUNT * 100)|round) }}{% else %}0{% endif %}%"></div>
 					<div class="bar-contents">
-						<strong>{{ ACHIEV_EARNED }} / {{ ACHIEV_POINTS }} {{ lang('ACHIEV_POINTS_TOTAL') }}</strong>
+						<strong>{{ ACHIEV_COMPLETED }} / {{ ACHIEV_TOTAL_COUNT }} ({{ ACHIEV_POINTS }} {{ lang('ACHIEV_POINTS_TOTAL') }})</strong>
 					</div>
 				</div>
-				<div class="achiev-completed-count">{{ ACHIEV_COMPLETED }} {{ lang('ACHIEV_COMPLETED_LABEL') }}</div>
 			</div>
 		</div>
 	</div>
@@ -20,18 +19,26 @@
 	{# ===== Level 1: Category cards ===== #}
 	<div id="achiev-level1">
 		{% if S_ACHIEV_HAS_CATEGORIES %}
+		<div class="achiev-filter-bar">
+			<label class="achiev-toggle">
+				<input type="checkbox" id="achiev-hide-empty" {% if S_ACHIEV_HIDE_EMPTY %}checked="checked"{% endif %} />
+				{{ lang('ACHIEV_HIDE_EMPTY') }}
+			</label>
+		</div>
 		<div class="achiev-categories">
 			{% for cat in achievement_categories %}
-			<div class="achiev-cat-card" data-category-id="{{ cat.ID }}" data-category-name="{{ cat.NAME }}">
+			<div class="achiev-cat-card{% if cat.S_EMPTY %} achiev-cat-empty{% endif %}" data-category-id="{{ cat.ID }}" data-category-name="{{ cat.NAME }}" data-completed="{{ cat.COMPLETED_COUNT }}" data-total="{{ cat.TOTAL_COUNT }}"{% if cat.S_EMPTY and S_ACHIEV_HIDE_EMPTY %} style="display:none"{% endif %}>
 				<svg class="achiev-ring" viewBox="0 0 80 80">
 					<circle class="achiev-ring-bg" cx="40" cy="40" r="34" />
 					<circle class="achiev-ring-fill" cx="40" cy="40" r="34"
 						stroke-dasharray="{{ 2 * 3.14159 * 34 }}"
 						stroke-dashoffset="{{ 2 * 3.14159 * 34 * (1 - cat.PERCENT / 100) }}" />
+					<text class="achiev-ring-text" x="40" y="40">{{ cat.PERCENT }}%</text>
 				</svg>
 				<div class="achiev-cat-label">
 					<div class="achiev-cat-name">{{ cat.NAME }}</div>
-					<div class="achiev-cat-stats">{{ cat.EARNED_POINTS }} / {{ cat.TOTAL_POINTS }}</div>
+					<div class="achiev-cat-stats">{{ cat.COMPLETED_COUNT }} / {{ cat.TOTAL_COUNT }}</div>
+					<div class="achiev-cat-points">{{ cat.EARNED_POINTS }} {{ lang('ACHIEV_POINTS_TOTAL') }}</div>
 				</div>
 			</div>
 			{% endfor %}
@@ -47,6 +54,7 @@
 			<a href="#" id="achiev-back">&laquo; {{ lang('ACHIEV_BACK') }}</a>
 		</div>
 		<h3 class="category" id="achiev-list-heading"></h3>
+		<div class="achiev-list-stats" id="achiev-list-stats"></div>
 		<div id="achiev-list-content"></div>
 	</div>
 
@@ -101,10 +109,14 @@
 
 	function loadCategory(id, name) {
 		document.getElementById('achiev-list-heading').textContent = name;
+		document.getElementById('achiev-list-stats').innerHTML = '';
 		document.getElementById('achiev-list-content').innerHTML = '<p>Loading...</p>';
 		level1.style.display = 'none';
 		level2.style.display = '';
 		fetch(listUrl + id).then(function(r) { return r.json(); }).then(function(data) {
+			document.getElementById('achiev-list-stats').innerHTML =
+				'<span class="achiev-list-count">' + (data.completed_count || 0) + ' / ' + (data.total_count || 0) + '</span>' +
+				'<span class="achiev-list-points">' + (data.earned_points || 0) + ' {{ lang('ACHIEV_POINTS_TOTAL') }}</span>';
 			var html = '';
 			if (!data.achievements || data.achievements.length === 0) {
 				html = '<p>No achievements found.</p>';
@@ -171,6 +183,35 @@
 			document.getElementById('achiev-modal-content').innerHTML = html;
 		}).catch(function() {
 			document.getElementById('achiev-modal-content').innerHTML = '<p>Error loading achievement detail.</p>';
+		});
+	}
+
+	function updateProgressBar() {
+		var cards = document.querySelectorAll('.achiev-cat-card');
+		var hideEmpty = hideCheckbox && hideCheckbox.checked;
+		var completed = 0, total = 0;
+		for (var i = 0; i < cards.length; i++) {
+			if (hideEmpty && cards[i].classList.contains('achiev-cat-empty')) {
+				continue;
+			}
+			completed += parseInt(cards[i].dataset.completed, 10) || 0;
+			total += parseInt(cards[i].dataset.total, 10) || 0;
+		}
+		var pct = total > 0 ? Math.min(100, Math.round(completed / total * 100)) : 0;
+		var bar = document.querySelector('.achievements-total .bar');
+		var contents = document.querySelector('.achievements-total .bar-contents strong');
+		if (bar) bar.style.width = pct + '%';
+		if (contents) contents.innerHTML = completed + ' / ' + total + ' ({{ ACHIEV_POINTS }} {{ lang('ACHIEV_POINTS_TOTAL') }})';
+	}
+
+	var hideCheckbox = document.getElementById('achiev-hide-empty');
+	if (hideCheckbox) {
+		hideCheckbox.addEventListener('change', function() {
+			var empties = document.querySelectorAll('.achiev-cat-empty');
+			for (var i = 0; i < empties.length; i++) {
+				empties[i].style.display = this.checked ? 'none' : '';
+			}
+			updateProgressBar();
 		});
 	}
 
