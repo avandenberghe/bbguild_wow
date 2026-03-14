@@ -38,6 +38,8 @@ $lang = array_merge(
 	'CALL_BATTLENET_CHAR_API' => 'Appel Battle.net Character API pour 50 membres WoW ayant la mise à jour la plus ancienne. Désactivation si la dernière activité sur l\'armurerie remonte à 180 jours.',
 	'ARM_SHOWACH' => 'Montrer les points des Hauts Faits ?',
 	'ARM_SHOWACH_EXPLAIN' => 'Afficher les totaux de points de haut fait dans la liste de guilde.',
+	'ARM_ACHIEV_HIDE_EMPTY' => 'Masquer les cat&eacute;gories vides',
+	'ARM_ACHIEV_HIDE_EMPTY_EXPLAIN' => 'Masquer les cat&eacute;gories de hauts faits sans progression dans le portail. Les utilisateurs peuvent basculer depuis le frontend.',
 
 	// Portal module names
 	'BBGUILD_PORTAL_ACHIEVEMENTS' => 'Hauts Faits',
@@ -57,4 +59,6 @@ $lang = array_merge(
 	'ACHIEV_CRITERIA'          => 'Crit&egrave;res',
 	'ACHIEV_FEATS_OF_STRENGTH' => 'Exploits',
 	'ACHIEV_SYNC_CATEGORIES'   => 'Synchroniser les cat&eacute;gories',
+	'ACHIEV_SHOW_EMPTY'        => 'Afficher toutes les cat&eacute;gories',
+	'ACHIEV_HIDE_EMPTY'        => 'Masquer les cat&eacute;gories vides',
 ));

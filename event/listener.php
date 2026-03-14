@@ -237,15 +237,17 @@ class listener implements EventSubscriberInterface
 	public function on_config_display()
 	{
 		$this->template->assign_vars(array(
-			'F_SHOWACHIEV' => (int) $this->config['bbguild_show_achiev'],
+			'F_SHOWACHIEV'        => (int) $this->config['bbguild_show_achiev'],
+			'F_ACHIEV_HIDE_EMPTY' => (int) $this->config['bbguild_achiev_hide_empty'],
 		));
 	}
 
 	/**
-	 * Save the "Show Achievement Points" setting from the bbGuild config page.
+	 * Save the achievement settings from the bbGuild config page.
 	 */
 	public function on_config_submit()
 	{
 		$this->config->set('bbguild_show_achiev', $this->request->variable('bbguild_show_achiev', 0), true);
+		$this->config->set('bbguild_achiev_hide_empty', $this->request->variable('bbguild_achiev_hide_empty', 0), true);
 	}
 }

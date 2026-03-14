@@ -40,6 +40,8 @@ $lang = array_merge(
 	'CALL_BATTLENET_CHAR_API' => 'Roep de Battle.net Character API aan voor deze gilde. Schakelt over naar inactief als lastModified langer dan 90 dagen geleden was, heractiveert als minder dan 90 dagen en de deactivatiestatus \'API\' was.',
 	'ARM_SHOWACH' => 'Prestatiepunten tonen',
 	'ARM_SHOWACH_EXPLAIN' => 'Prestatiepunttotalen tonen in de gildelijst.',
+	'ARM_ACHIEV_HIDE_EMPTY' => 'Lege prestatiecategorieën verbergen',
+	'ARM_ACHIEV_HIDE_EMPTY_EXPLAIN' => 'Verberg prestatiecategorieën zonder voortgang in het portaal. Gebruikers kunnen dit in de frontend schakelen.',
 
 	// Portal module names
 	'BBGUILD_PORTAL_ACHIEVEMENTS' => 'Prestaties',

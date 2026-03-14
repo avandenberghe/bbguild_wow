@@ -38,6 +38,8 @@ $lang = array_merge(
 	'CALL_BATTLENET_CHAR_API' => "Chiamare Battle.net API di caratteri per questa gilda. Alterna a inattivo se lastModified era > 90 giorni fa, riattiva se < 90 e il carattere disattivazione dello stato era 'API'.",
 	'ARM_SHOWACH' => 'Mostrare i Punti impresa',
 	'ARM_SHOWACH_EXPLAIN' => 'Visualizzare i totali dei punti impresa nella lista dei membri della gilda.',
+	'ARM_ACHIEV_HIDE_EMPTY' => 'Nascondere le categorie vuote',
+	'ARM_ACHIEV_HIDE_EMPTY_EXPLAIN' => 'Nascondere le categorie di imprese senza progressi nel portale. Gli utenti possono attivare/disattivare dal frontend.',
 
 	// Portal module names
 	'BBGUILD_PORTAL_ACHIEVEMENTS' => 'Imprese',
@@ -57,4 +59,6 @@ $lang = array_merge(
 	'ACHIEV_CRITERIA'          => 'Criteri',
 	'ACHIEV_FEATS_OF_STRENGTH' => 'Imprese epiche',
 	'ACHIEV_SYNC_CATEGORIES'   => 'Sincronizza categorie',
+	'ACHIEV_SHOW_EMPTY'        => 'Mostra tutte le categorie',
+	'ACHIEV_HIDE_EMPTY'        => 'Nascondi categorie vuote',
 ));

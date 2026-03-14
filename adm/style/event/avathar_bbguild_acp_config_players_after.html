@@ -4,3 +4,9 @@
                 <input type="checkbox" name="bbguild_show_achiev" id="bbguild_show_achiev" value="1" {% if F_SHOWACHIEV == 1 %} checked="checked"{% endif %}/>
             </dd>
         </dl>
+        <dl>
+            <dt><label for="bbguild_achiev_hide_empty">{{ lang('ARM_ACHIEV_HIDE_EMPTY') }}</label><br /><span>{{ lang('ARM_ACHIEV_HIDE_EMPTY_EXPLAIN') }}</span></dt>
+            <dd>
+                <input type="checkbox" name="bbguild_achiev_hide_empty" id="bbguild_achiev_hide_empty" value="1" {% if F_ACHIEV_HIDE_EMPTY == 1 %} checked="checked"{% endif %}/>
+            </dd>
+        </dl>

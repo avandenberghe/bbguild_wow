@@ -40,6 +40,8 @@ $lang = array_merge(
 	'CALL_BATTLENET_CHAR_API' => 'Llamar a la API de personajes de Battle.net para esta hermandad. Desactiva si lastModified fue hace más de 90 días, reactiva si es menos de 90 y el estado de desactivación del personaje fue \'API\'.',
 	'ARM_SHOWACH' => 'Mostrar puntos de logro',
 	'ARM_SHOWACH_EXPLAIN' => 'Mostrar los totales de puntos de logro en la lista de la hermandad.',
+	'ARM_ACHIEV_HIDE_EMPTY' => 'Ocultar categorías vacías',
+	'ARM_ACHIEV_HIDE_EMPTY_EXPLAIN' => 'Ocultar categorías de logros sin progreso en el portal. Los usuarios pueden alternar desde la interfaz.',
 
 	// Portal module names
 	'BBGUILD_PORTAL_ACHIEVEMENTS' => 'Logros',

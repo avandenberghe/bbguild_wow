@@ -40,6 +40,8 @@ $lang = array_merge(
 	'CALL_BATTLENET_CHAR_API' => 'Call Battle.net Character API for this Guild. Toggles to inactive if lastModified flag was > 90 days ago, reactivates if < 90 and character deactivation status was \'API\'.',
 	'ARM_SHOWACH' => 'Show Achievement Points',
 	'ARM_SHOWACH_EXPLAIN' => 'Display achievement point totals on the guild roster.',
+	'ARM_ACHIEV_HIDE_EMPTY' => 'Hide empty achievement categories',
+	'ARM_ACHIEV_HIDE_EMPTY_EXPLAIN' => 'Hide achievement categories with no progress from the portal. Users can toggle this from the frontend.',
 
 	// Portal module names
 	'BBGUILD_PORTAL_ACHIEVEMENTS' => 'Achievements',
@@ -59,4 +61,6 @@ $lang = array_merge(
 	'ACHIEV_CRITERIA'          => 'Criteria',
 	'ACHIEV_FEATS_OF_STRENGTH' => 'Feats of Strength',
 	'ACHIEV_SYNC_CATEGORIES'   => 'Sync Categories',
+	'ACHIEV_SHOW_EMPTY'        => 'Show all categories',
+	'ACHIEV_HIDE_EMPTY'        => 'Hide empty categories',
 ));
