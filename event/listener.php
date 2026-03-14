@@ -212,8 +212,12 @@ class listener implements EventSubscriberInterface
 
 		if ($row)
 		{
+			$board_url = generate_board_url();
 			$this->template->assign_vars(array(
-				'ARMORY_URL' => $row['guildarmoryurl'],
+				'ARMORY_URL'      => $row['guildarmoryurl'],
+				'U_ROSTER_SYNC'   => $board_url . '/app.php/bbguild_wow/sync-roster/' . $guild_id,
+				'U_SPEC_SYNC'     => $board_url . '/app.php/bbguild_wow/sync-specs/' . $guild_id,
+				'U_PORTRAIT_SYNC' => $board_url . '/app.php/bbguild_wow/sync-portraits/' . $guild_id,
 			));
 		}
 	}
@@ -250,4 +254,5 @@ class listener implements EventSubscriberInterface
 		$this->config->set('bbguild_show_achiev', $this->request->variable('bbguild_show_achiev', 0), true);
 		$this->config->set('bbguild_achiev_hide_empty', $this->request->variable('bbguild_achiev_hide_empty', 0), true);
 	}
+
 }

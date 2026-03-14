@@ -61,6 +61,13 @@ $lang = array_merge(
 	'ACHIEV_CRITERIA'          => 'Criteria',
 	'ACHIEV_FEATS_OF_STRENGTH' => 'Feats of Strength',
 	'ACHIEV_SYNC_CATEGORIES'   => 'Sync Categories',
+	'WOW_SYNC_PORTRAITS'       => 'Sync Portraits',
+	'WOW_SYNC_PORTRAITS_EXPLAIN' => 'Fetch character portraits from the Battle.net Character Media API. Processes ~20 characters per click.',
+	'WOW_SYNC_PROGRESS'        => 'Sync Progress',
+	'WOW_PHASE_ROSTER'         => 'Roster',
+	'WOW_PHASE_SPECS'          => 'Specializations',
+	'WOW_PHASE_PORTRAITS'      => 'Portraits',
+	'WOW_GUILD_SYNC_EXPLAIN'   => 'Syncs guild roster, then fetches specializations and portraits from the Battle.net API. Large guilds may take a few minutes.',
 	'ACHIEV_SHOW_EMPTY'        => 'Show all categories',
 	'ACHIEV_HIDE_EMPTY'        => 'Hide empty categories',
 ));

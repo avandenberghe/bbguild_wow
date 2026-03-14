@@ -39,6 +39,15 @@ services:
         tags:
             - { name: event.listener }
 
+    avathar.bbguild_wow.portrait_controller:
+        class: avathar\bbguild_wow\controller\portrait_controller
+        arguments:
+            - '@avathar.bbguild_wow.api'
+            - '@dbal.conn'
+            - '%avathar.bbguild.tables.bb_players%'
+            - '%avathar.bbguild.tables.bb_guild%'
+            - '%avathar.bbguild.tables.bb_games%'
+
     avathar.bbguild_wow.achievement:
         class: avathar\bbguild_wow\model\achievement
         arguments:

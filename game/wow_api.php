@@ -235,19 +235,268 @@ class wow_api implements game_api_interface
 	 */
 	public function get_player_portrait_url(array $player_data): string
 	{
-		// New API: character media endpoint provides avatar URLs
-		// For roster sync, portrait URL is constructed from character media
-		if (isset($player_data['realm_slug']) && isset($player_data['name']) && isset($player_data['region']))
+		// Portrait URLs are fetched via the Character Media API and stored
+		// in player_portrait_url. This method returns an already-stored URL
+		// if available, otherwise empty (portraits are synced separately).
+		if (isset($player_data['player_portrait_url']) && !empty($player_data['player_portrait_url']))
 		{
-			return sprintf(
-				'https://render.worldofwarcraft.com/character/%s/%s/%s-avatar.jpg',
-				$player_data['region'],
-				$player_data['realm_slug'],
-				strtolower($player_data['name'])
-			);
+			return $player_data['player_portrait_url'];
 		}
 
 		return '';
+	}
+
+	/**
+	 * Fetch character portraits from the Character Media API.
+	 *
+	 * Processes players that have an empty portrait URL, with a time guard
+	 * to stay within PHP's execution limit. Re-running covers more players.
+	 *
+	 * @param int    $guild_id
+	 * @param string $region
+	 * @param string $apikey
+	 * @param string $locale
+	 * @param string $privkey
+	 * @return array Result with 'success', 'message', 'count'
+	 */
+	public function sync_portraits(int $guild_id, string $region, string $apikey, string $locale, string $privkey): array
+	{
+		global $phpbb_root_path, $phpbb_container;
+		$db = $this->db;
+
+		// Use phpBB's configured upload path (default: 'files')
+		$upload_path = $phpbb_container->get('config')['upload_path'];
+		$portrait_rel = $upload_path . '/bbguild_wow/portraits/';
+		$portrait_dir = $phpbb_root_path . $portrait_rel;
+		if (!is_dir($portrait_dir))
+		{
+			@mkdir($portrait_dir, 0755, true);
+		}
+
+		// Get players without local portraits (empty, NULL, or still pointing to external URLs)
+		$sql = 'SELECT player_id, player_name, player_realm, player_region
+			FROM ' . $this->bb_players_table . '
+			WHERE player_guild_id = ' . $guild_id . '
+				AND game_id = \'wow\'
+				AND player_status = 1
+				AND (player_portrait_url = \'\'
+					OR player_portrait_url IS NULL
+					OR player_portrait_url LIKE \'http%\')
+			ORDER BY player_id';
+		$result = $db->sql_query($sql);
+
+		$players = array();
+		while ($row = $db->sql_fetchrow($result))
+		{
+			$players[] = $row;
+		}
+		$db->sql_freeresult($result);
+
+		if (empty($players))
+		{
+			return array('success' => true, 'message' => 'All player portraits are up to date.', 'count' => 0);
+		}
+
+		$api = new battlenet('character', $region, $apikey, $locale, $privkey, '', $this->cache);
+
+		$time_start = time();
+		$time_limit = 20;
+		$fetched = 0;
+		$failed = 0;
+
+		foreach ($players as $player)
+		{
+			if ((time() - $time_start) >= $time_limit)
+			{
+				break;
+			}
+
+			$realm_slug = $player['player_realm'];
+			$char_name = strtolower($player['player_name']);
+
+			$response = $api->character->getCharacterMedia($realm_slug, $char_name);
+			$data = isset($response['response']) ? $response['response'] : null;
+
+			if (!is_array($data) || isset($data['code']))
+			{
+				$failed++;
+				continue;
+			}
+
+			// Extract avatar URL from assets array
+			$avatar_url = '';
+			if (isset($data['assets']) && is_array($data['assets']))
+			{
+				foreach ($data['assets'] as $asset)
+				{
+					if (isset($asset['key']) && $asset['key'] === 'avatar' && isset($asset['value']))
+					{
+						$avatar_url = $asset['value'];
+						break;
+					}
+				}
+			}
+
+			if (!empty($avatar_url))
+			{
+				// Download and cache portrait locally
+				$local_path = $this->download_portrait($avatar_url, $portrait_dir, $portrait_rel, (int) $player['player_id']);
+
+				$stored_url = !empty($local_path) ? $local_path : $avatar_url;
+
+				$db->sql_query('UPDATE ' . $this->bb_players_table .
+					" SET player_portrait_url = '" . $db->sql_escape($stored_url) . "'" .
+					' WHERE player_id = ' . (int) $player['player_id']);
+				$fetched++;
+			}
+			else
+			{
+				$failed++;
+			}
+		}
+
+		unset($api);
+
+		$remaining = count($players) - $fetched - $failed;
+		$message = sprintf('Fetched %d portraits.', $fetched);
+		if ($failed > 0)
+		{
+			$message .= sprintf(' %d failed (character may be inactive).', $failed);
+		}
+		if ($remaining > 0)
+		{
+			$message .= sprintf(' %d remaining.', $remaining);
+		}
+
+		return array('success' => true, 'message' => $message, 'count' => $fetched);
+	}
+
+	/**
+	 * Fetch active specializations from the Character Specializations API.
+	 *
+	 * Processes players that have an empty spec, with a time guard.
+	 *
+	 * @param int    $guild_id
+	 * @param string $region
+	 * @param string $apikey
+	 * @param string $locale
+	 * @param string $privkey
+	 * @return array Result with 'success', 'message', 'count'
+	 */
+	public function sync_specs(int $guild_id, string $region, string $apikey, string $locale, string $privkey): array
+	{
+		$db = $this->db;
+
+		// Get players without specs
+		$sql = 'SELECT player_id, player_name, player_realm
+			FROM ' . $this->bb_players_table . '
+			WHERE player_guild_id = ' . $guild_id . '
+				AND game_id = \'wow\'
+				AND player_status = 1
+				AND (player_spec = \'\' OR player_spec IS NULL)
+			ORDER BY player_id';
+		$result = $db->sql_query($sql);
+
+		$players = array();
+		while ($row = $db->sql_fetchrow($result))
+		{
+			$players[] = $row;
+		}
+		$db->sql_freeresult($result);
+
+		if (empty($players))
+		{
+			return array('success' => true, 'message' => 'All player specs are up to date.', 'count' => 0);
+		}
+
+		$api = new battlenet('character', $region, $apikey, $locale, $privkey, '', $this->cache);
+
+		$time_start = time();
+		$time_limit = 20;
+		$fetched = 0;
+		$failed = 0;
+
+		foreach ($players as $player)
+		{
+			if ((time() - $time_start) >= $time_limit)
+			{
+				break;
+			}
+
+			$response = $api->character->getCharacterSpecializations(
+				$player['player_realm'],
+				strtolower($player['player_name'])
+			);
+			$data = isset($response['response']) ? $response['response'] : null;
+
+			if (!is_array($data) || isset($data['code']))
+			{
+				$failed++;
+				continue;
+			}
+
+			$spec_name = '';
+			if (isset($data['active_specialization']['name']))
+			{
+				$spec_name = $data['active_specialization']['name'];
+			}
+
+			$db->sql_query('UPDATE ' . $this->bb_players_table .
+				" SET player_spec = '" . $db->sql_escape($spec_name) . "'" .
+				' WHERE player_id = ' . (int) $player['player_id']);
+
+			if (!empty($spec_name))
+			{
+				$fetched++;
+			}
+			else
+			{
+				$failed++;
+			}
+		}
+
+		unset($api);
+
+		$remaining = count($players) - $fetched - $failed;
+		$message = sprintf('Fetched %d specs.', $fetched);
+		if ($failed > 0)
+		{
+			$message .= sprintf(' %d failed.', $failed);
+		}
+		if ($remaining > 0)
+		{
+			$message .= sprintf(' %d remaining.', $remaining);
+		}
+
+		return array('success' => true, 'message' => $message, 'count' => $fetched);
+	}
+
+	/**
+	 * Download a portrait image and store it locally.
+	 *
+	 * @param string $url          Remote image URL
+	 * @param string $portrait_dir Absolute directory path
+	 * @param string $portrait_rel Relative directory path (for DB storage)
+	 * @param int    $player_id    Player ID for filename
+	 * @return string Local relative path, or empty on failure
+	 */
+	private function download_portrait(string $url, string $portrait_dir, string $portrait_rel, int $player_id): string
+	{
+		$image_data = @file_get_contents($url);
+		if ($image_data === false || strlen($image_data) < 100)
+		{
+			return '';
+		}
+
+		$filename = $player_id . '.jpg';
+		$local_file = $portrait_dir . $filename;
+
+		if (@file_put_contents($local_file, $image_data) === false)
+		{
+			return '';
+		}
+
+		return $portrait_rel . $filename;
 	}
 
 	/**
@@ -405,11 +654,7 @@ class wow_api implements game_api_interface
 					'player_armory_url'   => $armory_url,
 					'phpbb_user_id'       => 0,
 					'game_id'             => 'wow',
-					'player_portrait_url' => $this->get_player_portrait_url([
-						'realm_slug' => $realm_slug,
-						'name'       => $char['name'],
-						'region'     => $region,
-					]),
+					'player_portrait_url' => '',
 					'player_title'        => '',
 					'last_update'         => time(),
 				));
@@ -441,11 +686,6 @@ class wow_api implements game_api_interface
 					'player_rank_id'      => (int) $mb['rank'],
 					'player_guild_id'     => (int) $guild_id,
 					'player_armory_url'   => $this->get_player_armory_url($char['name'], $realm_slug, $region),
-					'player_portrait_url' => $this->get_player_portrait_url([
-						'realm_slug' => $realm_slug,
-						'name'       => $char['name'],
-						'region'     => $region,
-					]),
 					'last_update'         => time(),
 				);
 

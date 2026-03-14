@@ -52,4 +52,28 @@ class battlenet_character extends battlenet_resource
 
 		return $this->consume($realm_slug . '/' . strtolower($character_name), array());
 	}
+
+	/**
+	 * Fetch character media (avatar, inset, main render).
+	 *
+	 * @param string $realm_slug     Lowercase hyphenated realm slug
+	 * @param string $character_name Lowercase character name
+	 * @return array
+	 */
+	public function getCharacterMedia(string $realm_slug, string $character_name): array
+	{
+		return $this->consume($realm_slug . '/' . strtolower($character_name) . '/character-media', array());
+	}
+
+	/**
+	 * Fetch character specializations (active spec + all specs).
+	 *
+	 * @param string $realm_slug     Lowercase hyphenated realm slug
+	 * @param string $character_name Lowercase character name
+	 * @return array
+	 */
+	public function getCharacterSpecializations(string $realm_slug, string $character_name): array
+	{
+		return $this->consume($realm_slug . '/' . strtolower($character_name) . '/specializations', array());
+	}
 }

@@ -11,6 +11,24 @@ avathar_bbguild_wow_achiev_list:
         guild_id: \d+
         category_id: \d+
 
+avathar_bbguild_wow_sync_roster:
+    path: /bbguild_wow/sync-roster/{guild_id}
+    defaults: { _controller: avathar.bbguild_wow.portrait_controller:sync_roster }
+    requirements:
+        guild_id: \d+
+
+avathar_bbguild_wow_sync_specs:
+    path: /bbguild_wow/sync-specs/{guild_id}
+    defaults: { _controller: avathar.bbguild_wow.portrait_controller:sync_specs }
+    requirements:
+        guild_id: \d+
+
+avathar_bbguild_wow_sync_portraits:
+    path: /bbguild_wow/sync-portraits/{guild_id}
+    defaults: { _controller: avathar.bbguild_wow.portrait_controller:sync }
+    requirements:
+        guild_id: \d+
+
 avathar_bbguild_wow_achiev_detail:
     path: /bbguild_wow/achievements/detail/{guild_id}/{achievement_id}
     defaults: { _controller: avathar.bbguild_wow.achievement_controller:achievement_detail }

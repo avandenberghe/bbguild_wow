@@ -52,6 +52,7 @@ class data extends \phpbb\db\migration\container_aware_migration
 		return [
 			['config.remove', ['bbguild_show_achiev']],
 			['custom', [[$this, 'remove_game_data']]],
+			['custom', [[$this, 'remove_wow_players_and_guilds']]],
 		];
 	}
 
@@ -65,6 +66,61 @@ class data extends \phpbb\db\migration\container_aware_migration
 	{
 		$installer = $this->get_installer();
 		$installer->uninstall($this->get_table_names(), 'wow', 'World of Warcraft');
+	}
+
+	public function remove_wow_players_and_guilds()
+	{
+		$players_table = $this->table_prefix . 'bb_players';
+		$guild_table = $this->table_prefix . 'bb_guild';
+		$ranks_table = $this->table_prefix . 'bb_ranks';
+		$guild_wow_table = $this->table_prefix . 'bb_guild_wow';
+
+		// Delete WoW players
+		$this->db->sql_query("DELETE FROM $players_table WHERE game_id = 'wow'");
+
+		// Get WoW guild IDs (guilds that have no remaining players from other games)
+		$sql = "SELECT g.id FROM $guild_table g
+			WHERE g.id > 0
+			AND g.game_id = 'wow'
+			AND NOT EXISTS (
+				SELECT 1 FROM $players_table p
+				WHERE p.player_guild_id = g.id AND p.game_id <> 'wow'
+			)";
+		$result = $this->db->sql_query($sql);
+		$guild_ids = array();
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$guild_ids[] = (int) $row['id'];
+		}
+		$this->db->sql_freeresult($result);
+
+		if (!empty($guild_ids))
+		{
+			$this->db->sql_query('DELETE FROM ' . $ranks_table .
+				' WHERE ' . $this->db->sql_in_set('guild_id', $guild_ids));
+			$this->db->sql_query('DELETE FROM ' . $guild_table .
+				' WHERE ' . $this->db->sql_in_set('id', $guild_ids));
+		}
+
+		// Clean up guild_wow table
+		if ($this->db_tools->sql_table_exists($guild_wow_table))
+		{
+			$this->db->sql_query("DELETE FROM $guild_wow_table");
+		}
+
+		// Clean up downloaded portraits
+		$upload_path = $this->config['upload_path'];
+		$portrait_dir = $this->phpbb_root_path . $upload_path . '/bbguild_wow/';
+		if (is_dir($portrait_dir))
+		{
+			$files = glob($portrait_dir . 'portraits/*.jpg');
+			if ($files)
+			{
+				array_map('unlink', $files);
+			}
+			@rmdir($portrait_dir . 'portraits');
+			@rmdir($portrait_dir);
+		}
 	}
 
 	private function get_installer()
