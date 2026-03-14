@@ -966,6 +966,12 @@ class achievement
 			'reward'      => $this->reward,
 		);
 
+		// Set category_id from the API response if available
+		if (isset($data['category']['id']))
+		{
+			$sql_ary['category_id'] = (int) $data['category']['id'];
+		}
+
 		$db->sql_query('INSERT INTO ' . $this->bb_achievement_table . ' ' . $db->sql_build_array('INSERT', $sql_ary));
 	}
 
@@ -1024,6 +1030,12 @@ class achievement
 			'icon'        => $icon,
 			'reward'      => $reward,
 		);
+
+		// Set category_id from the API response if available
+		if (isset($data['category']['id']))
+		{
+			$sql_ary['category_id'] = (int) $data['category']['id'];
+		}
 
 		$db->sql_query('UPDATE ' . $this->bb_achievement_table .
 			' SET ' . $db->sql_build_array('UPDATE', $sql_ary) .
@@ -1253,11 +1265,52 @@ class achievement
 		}
 
 		// Also include root categories that have no subcategories (they are their own leaf)
+		// Skip leaf categories where ALL local achievements already have this category_id,
+		// so re-running covers more ground instead of repeating the same leaves.
+		$already_mapped = array();
+		$sql = 'SELECT category_id, COUNT(*) AS cnt FROM ' . $this->bb_achievement_table .
+			" WHERE game_id = '" . $db->sql_escape($game->game_id) . "' AND category_id > 0" .
+			' GROUP BY category_id';
+		$result = $db->sql_query($sql);
+		while ($row = $db->sql_fetchrow($result))
+		{
+			$already_mapped[(int) $row['category_id']] = (int) $row['cnt'];
+		}
+		$db->sql_freeresult($result);
+
+		// Put unmapped leaves first so new categories get processed before revisiting old ones
+		$unmapped_leaves = array();
+		$mapped_leaves = array();
+		foreach ($leaf_ids as $leaf_id)
+		{
+			if (isset($already_mapped[$leaf_id]))
+			{
+				$mapped_leaves[] = $leaf_id;
+			}
+			else
+			{
+				$unmapped_leaves[] = $leaf_id;
+			}
+		}
+		$ordered_leaves = array_merge($unmapped_leaves, $mapped_leaves);
+
+		// Load existing achievement IDs so we can insert stubs for missing ones.
+		// PK is just `id` (not composite with game_id), so check all IDs regardless of game.
+		$existing_ids = array();
+		$sql = 'SELECT id FROM ' . $this->bb_achievement_table;
+		$result = $db->sql_query($sql);
+		while ($row = $db->sql_fetchrow($result))
+		{
+			$existing_ids[(int) $row['id']] = true;
+		}
+		$db->sql_freeresult($result);
+
 		$time_start = time();
 		$time_limit = 20;
 		$mapped_count = 0;
+		$inserted_count = 0;
 
-		foreach ($leaf_ids as $leaf_id)
+		foreach ($ordered_leaves as $leaf_id)
 		{
 			if ((time() - $time_start) >= $time_limit)
 			{
@@ -1273,30 +1326,68 @@ class achievement
 			}
 
 			$achievement_ids = array();
+			$stub_rows = array();
 			if (isset($detail_data['achievements']) && is_array($detail_data['achievements']))
 			{
 				foreach ($detail_data['achievements'] as $ach)
 				{
 					$aid = isset($ach['id']) ? (int) $ach['id'] : 0;
-					if ($aid > 0)
+					if ($aid === 0)
 					{
-						$achievement_ids[] = $aid;
+						continue;
+					}
+					$achievement_ids[] = $aid;
+
+					// Insert stub for achievements not yet in the table
+					if (!isset($existing_ids[$aid]))
+					{
+						$stub_rows[] = array(
+							'id'          => $aid,
+							'game_id'     => $game->game_id,
+							'title'       => isset($ach['name']) ? $ach['name'] : '',
+							'points'      => 0,
+							'description' => '',
+							'icon'        => '',
+							'factionid'   => 2,
+							'reward'      => '',
+							'category_id' => (int) $leaf_id,
+						);
+						$existing_ids[$aid] = true;
 					}
 				}
 			}
 
+			if (!empty($stub_rows))
+			{
+				$db->sql_multi_insert($this->bb_achievement_table, $stub_rows);
+				$inserted_count += count($stub_rows);
+			}
+
 			if (!empty($achievement_ids))
 			{
+				// Update category_id for achievements already in the table
 				$db->sql_query('UPDATE ' . $this->bb_achievement_table .
 					' SET category_id = ' . (int) $leaf_id .
-					' WHERE ' . $db->sql_in_set('id', $achievement_ids));
+					' WHERE ' . $db->sql_in_set('id', $achievement_ids) .
+					' AND category_id <> ' . (int) $leaf_id);
 				$mapped_count += count($achievement_ids);
 			}
 		}
 
 		unset($api);
 
-		$message = sprintf('Synced %d categories, mapped %d achievements.', $cat_count, $mapped_count);
+		// Count achievements still without a category
+		$sql = 'SELECT COUNT(*) AS cnt FROM ' . $this->bb_achievement_table .
+			" WHERE game_id = '" . $db->sql_escape($game->game_id) . "' AND category_id = 0";
+		$result = $db->sql_query($sql);
+		$unmapped_remaining = (int) $db->sql_fetchfield('cnt');
+		$db->sql_freeresult($result);
+
+		$message = sprintf('Synced %d categories, inserted %d new achievements, mapped %d.', $cat_count, $inserted_count, $mapped_count);
+		if ($unmapped_remaining > 0)
+		{
+			$message .= sprintf(' %d achievements still need category mapping — click "Sync Categories" again.', $unmapped_remaining);
+		}
 
 		return array(
 			'success' => true,
@@ -1319,9 +1410,9 @@ class achievement
 
 		$sql = 'SELECT ac.id, ac.name, ac.display_order,
 				COUNT(a.id) AS total_count,
-				COUNT(at.achievement_id) AS completed_count,
+				SUM(CASE WHEN at.achievements_completed > 0 THEN 1 ELSE 0 END) AS completed_count,
 				SUM(a.points) AS total_points,
-				COALESCE(SUM(CASE WHEN at.achievement_id IS NOT NULL THEN a.points ELSE 0 END), 0) AS earned_points
+				COALESCE(SUM(CASE WHEN at.achievements_completed > 0 THEN a.points ELSE 0 END), 0) AS earned_points
 			FROM ' . $this->bb_achievement_category_table . ' ac
 			INNER JOIN ' . $this->bb_achievement_category_table . ' child
 				ON (child.parent_id = ac.id OR child.id = ac.id)
