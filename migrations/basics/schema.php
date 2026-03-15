@@ -45,10 +45,28 @@ class schema extends \phpbb\db\migration\migration
 						'icon'            => ['VCHAR_UNI:255', ''],
 						'factionid'       => ['BOOL', 0],
 						'reward'          => ['VCHAR_UNI:255', ''],
+						'category_id'     => ['UINT', 0],
 					],
 					'PRIMARY_KEY' => 'id',
+					'KEYS' => [
+						'idx_category' => ['INDEX', ['category_id']],
+					],
 				],
-				/* 2 - achievement criteria */
+				/* 2 - achievement categories */
+				$this->table_prefix . 'bb_achievement_category' => [
+					'COLUMNS' => [
+						'id'            => ['UINT', 0],
+						'game_id'       => ['VCHAR:10', ''],
+						'parent_id'     => ['UINT', 0],
+						'name'          => ['VCHAR_UNI:255', ''],
+						'display_order' => ['USINT', 0],
+					],
+					'PRIMARY_KEY' => 'id',
+					'KEYS' => [
+						'idx_parent' => ['INDEX', ['parent_id']],
+					],
+				],
+				/* 3 - achievement criteria */
 				$this->achievement_criteria_table => [
 					'COLUMNS' => [
 						'criteria_id'   => ['UINT', 0],
@@ -114,6 +132,7 @@ class schema extends \phpbb\db\migration\migration
 		return [
 			'drop_tables' => [
 				$this->achievement_table,
+				$this->table_prefix . 'bb_achievement_category',
 				$this->achievement_criteria_table,
 				$this->achievement_rewards_table,
 				$this->bb_relations_table,

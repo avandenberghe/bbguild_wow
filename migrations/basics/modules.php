@@ -36,12 +36,19 @@ class modules extends \phpbb\db\migration\migration
 				'module_basename' => '\avathar\bbguild_wow\acp\achievement_module',
 				'modes'           => ['addachievement', 'listachievements'],
 			]]],
+			['module.add', ['acp', 'ACP_BBGUILD_MAINPAGE', [
+				'module_basename' => '\avathar\bbguild_wow\acp\battlenet_module',
+				'modes'           => ['battlenet'],
+			]]],
 		];
 	}
 
 	public function revert_data()
 	{
 		return [
+			['module.remove', ['acp', 'ACP_BBGUILD_MAINPAGE', [
+				'module_basename' => '\avathar\bbguild_wow\acp\battlenet_module',
+			]]],
 			['module.remove', ['acp', 'ACP_BBGUILD_PLAYER', [
 				'module_basename' => '\avathar\bbguild_wow\acp\achievement_module',
 			]]],

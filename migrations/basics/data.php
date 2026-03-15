@@ -43,6 +43,7 @@ class data extends \phpbb\db\migration\container_aware_migration
 	{
 		return [
 			['config.add', ['bbguild_show_achiev', 0]],
+			['config.add', ['bbguild_achiev_hide_empty', 1]],
 			['custom', [[$this, 'seed_game_data']]],
 		];
 	}
@@ -51,6 +52,7 @@ class data extends \phpbb\db\migration\container_aware_migration
 	{
 		return [
 			['config.remove', ['bbguild_show_achiev']],
+			['config.remove', ['bbguild_achiev_hide_empty']],
 			['custom', [[$this, 'remove_game_data']]],
 			['custom', [[$this, 'remove_wow_players_and_guilds']]],
 		];
