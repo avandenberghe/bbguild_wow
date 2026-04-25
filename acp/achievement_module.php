@@ -275,7 +275,7 @@ class achievement_module
 	/***
 	 * get a guild from pulldown
 	 *
-	 * @return \avathar\bbguild\model\player\guilds
+	 * @return guilds
 	 */
 	private function GetGuild()
 	{
