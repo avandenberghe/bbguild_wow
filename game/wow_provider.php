@@ -134,4 +134,17 @@ class wow_provider implements game_provider_interface
 			'sea' => array('en_US'),
 		);
 	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function get_armor_types(): array
+	{
+		return array(
+			'CLOTH'   => 'Cloth',
+			'LEATHER' => 'Leather',
+			'MAIL'    => 'Mail',
+			'PLATE'   => 'Plate',
+		);
+	}
 }
