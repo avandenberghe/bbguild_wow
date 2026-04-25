@@ -90,6 +90,9 @@ $lang = array_merge(
 	'WOW_EDITION_CLASSIC_PROG' => 'Classic (Progression)',
 	'WOW_EDITION_CLASSIC_ANN'  => 'Classic (Anniversary)',
 
+	// Sync phases
+	'WOW_PHASE_EQUIPMENT'      => 'Equipment',
+
 	// Player detail page
 	'WOW_SPECIALIZATION'       => 'Specialization',
 ));

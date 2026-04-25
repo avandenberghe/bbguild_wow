@@ -387,6 +387,103 @@ class portrait_controller
 	}
 
 	/**
+	 * Process a batch of equipment syncs and return progress as JSON.
+	 *
+	 * @param int $guild_id
+	 * @return JsonResponse
+	 */
+	public function sync_equipment($guild_id)
+	{
+		global $phpbb_container;
+		$guild_id = (int) $guild_id;
+
+		$sql = 'SELECT apikey, privkey, apilocale, region FROM ' . $this->games_table .
+			" WHERE game_id = 'wow'";
+		$result = $this->db->sql_query($sql);
+		$game_row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		if (!$game_row || empty($game_row['apikey']))
+		{
+			return new JsonResponse(array('error' => 'API credentials not configured', 'done' => true), 400);
+		}
+
+		$sql = 'SELECT name, region, game_edition FROM ' . $this->guild_table . ' WHERE id = ' . $guild_id;
+		$result = $this->db->sql_query($sql);
+		$guild_row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		$guild_name = $guild_row ? $guild_row['name'] : '(unknown)';
+		$region = (!empty($guild_row['region'])) ? $guild_row['region'] : $game_row['region'];
+		$edition = (!empty($guild_row['game_edition'])) ? $guild_row['game_edition'] : 'retail';
+
+		$equipment_table = $phpbb_container->getParameter('avathar.bbguild_wow.tables.bb_player_equipment');
+		$stale_threshold = time() - 86400;
+
+		// Count total and remaining
+		$sql = 'SELECT COUNT(*) AS total FROM ' . $this->players_table .
+			' WHERE player_guild_id = ' . $guild_id .
+			" AND game_id = 'wow' AND player_status = 1";
+		$result = $this->db->sql_query($sql);
+		$total = (int) $this->db->sql_fetchfield('total');
+		$this->db->sql_freeresult($result);
+
+		$sql = 'SELECT COUNT(DISTINCT p.player_id) AS remaining FROM ' . $this->players_table . ' p
+			LEFT JOIN ' . $equipment_table . ' e
+				ON e.player_id = p.player_id AND e.slot_type = \'HEAD\'
+			WHERE p.player_guild_id = ' . $guild_id . '
+				AND p.game_id = \'wow\' AND p.player_status = 1
+				AND (e.player_id IS NULL OR e.last_update < ' . $stale_threshold . ')';
+		$result = $this->db->sql_query($sql);
+		$remaining_before = (int) $this->db->sql_fetchfield('remaining');
+		$this->db->sql_freeresult($result);
+
+		if ($remaining_before === 0)
+		{
+			return new JsonResponse(array(
+				'done' => true, 'fetched' => 0, 'total' => $total, 'remaining' => 0,
+				'message' => 'All equipment is up to date.',
+			));
+		}
+
+		$sync_result = $this->wow_api->sync_equipment(
+			$guild_id, $region,
+			$game_row['apikey'], $game_row['apilocale'], $game_row['privkey'], $edition
+		);
+
+		// Recount remaining
+		$sql = 'SELECT COUNT(DISTINCT p.player_id) AS remaining FROM ' . $this->players_table . ' p
+			LEFT JOIN ' . $equipment_table . ' e
+				ON e.player_id = p.player_id AND e.slot_type = \'HEAD\'
+			WHERE p.player_guild_id = ' . $guild_id . '
+				AND p.game_id = \'wow\' AND p.player_status = 1
+				AND (e.player_id IS NULL OR e.last_update < ' . $stale_threshold . ')';
+		$result = $this->db->sql_query($sql);
+		$remaining_after = (int) $this->db->sql_fetchfield('remaining');
+		$this->db->sql_freeresult($result);
+
+		$has_server_errors = $this->has_server_errors($sync_result);
+		$is_done = $remaining_after === 0 || $has_server_errors;
+
+		if ($is_done)
+		{
+			$this->bbguildlog->log_insert(array(
+				'log_type'   => ($sync_result['count'] > 0 && !$has_server_errors) ? 'L_ACTION_EQUIPMENT_SYNCED' : 'L_ERROR_EQUIPMENT_SYNCED',
+				'log_result' => ($sync_result['count'] > 0 && !$has_server_errors) ? 'L_SUCCESS' : 'L_ERROR',
+				'log_action' => [$guild_name, $sync_result['message']],
+			));
+		}
+
+		return new JsonResponse(array(
+			'done'      => $is_done,
+			'fetched'   => $sync_result['count'],
+			'total'     => $total,
+			'remaining' => $remaining_after,
+			'message'   => $sync_result['message'],
+		));
+	}
+
+	/**
 	 * Check if a sync result contains server-side (5xx) errors.
 	 *
 	 * @param array $sync_result Result from wow_api sync methods

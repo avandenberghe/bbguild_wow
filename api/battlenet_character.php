@@ -78,6 +78,18 @@ class battlenet_character extends battlenet_resource
 	}
 
 	/**
+	 * Fetch character equipment (gear in all slots).
+	 *
+	 * @param string $realm_slug     Lowercase hyphenated realm slug
+	 * @param string $character_name Lowercase character name
+	 * @return array
+	 */
+	public function getCharacterEquipment(string $realm_slug, string $character_name): array
+	{
+		return $this->consume($realm_slug . '/' . $this->normalize_name($character_name) . '/equipment', array());
+	}
+
+	/**
 	 * Normalize a character name for the Battle.net API.
 	 *
 	 * The API expects lowercase names with proper Unicode handling.

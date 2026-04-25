@@ -537,6 +537,142 @@ class wow_api implements game_api_interface
 	}
 
 	/**
+	 * Fetch character equipment from the Character Equipment API and cache in DB.
+	 *
+	 * Processes players whose equipment hasn't been synced recently (>24h),
+	 * with a time guard to stay within PHP's execution limit.
+	 *
+	 * @param int    $guild_id
+	 * @param string $region
+	 * @param string $apikey
+	 * @param string $locale
+	 * @param string $privkey
+	 * @param string $edition
+	 * @return array Result with 'success', 'message', 'count'
+	 */
+	public function sync_equipment(int $guild_id, string $region, string $apikey, string $locale, string $privkey, string $edition = 'retail'): array
+	{
+		global $phpbb_container;
+		$db = $this->db;
+
+		$equipment_table = $phpbb_container->getParameter('avathar.bbguild_wow.tables.bb_player_equipment');
+		$stale_threshold = time() - 86400; // 24 hours
+
+		// Get active WoW players whose equipment is stale or missing
+		$sql = 'SELECT p.player_id, p.player_name, p.player_realm
+			FROM ' . $this->bb_players_table . ' p
+			LEFT JOIN ' . $equipment_table . ' e
+				ON e.player_id = p.player_id AND e.slot_type = \'HEAD\'
+			WHERE p.player_guild_id = ' . $guild_id . '
+				AND p.game_id = \'wow\'
+				AND p.player_status = 1
+				AND (e.player_id IS NULL OR e.last_update < ' . $stale_threshold . ')
+			ORDER BY p.player_id';
+		$result = $db->sql_query($sql);
+
+		$players = array();
+		while ($row = $db->sql_fetchrow($result))
+		{
+			$players[] = $row;
+		}
+		$db->sql_freeresult($result);
+
+		if (empty($players))
+		{
+			return array('success' => true, 'message' => 'All player equipment is up to date.', 'count' => 0);
+		}
+
+		$api = new battlenet('character', $region, $apikey, $locale, $privkey, '', $this->cache, 3600, $edition);
+
+		$time_start = time();
+		$time_limit = 20;
+		$fetched = 0;
+		$failed = 0;
+		$errors = array();
+
+		foreach ($players as $player)
+		{
+			if ((time() - $time_start) >= $time_limit)
+			{
+				break;
+			}
+
+			$response = $api->character->getCharacterEquipment(
+				$player['player_realm'],
+				$player['player_name']
+			);
+			$data = isset($response['response']) ? $response['response'] : null;
+			$http_code = isset($response['response_headers']['http_code']) ? (int) $response['response_headers']['http_code'] : 0;
+
+			if (!is_array($data) || isset($data['code']) || !isset($data['equipped_items']))
+			{
+				$error_code = isset($data['code']) ? (int) $data['code'] : $http_code;
+				if ($error_code === 0) $error_code = 'unknown';
+				$errors[$error_code][] = $player['player_name'];
+				$failed++;
+
+				if ($http_code >= 500) break;
+				continue;
+			}
+
+			$now = time();
+			$player_id = (int) $player['player_id'];
+
+			// Delete existing equipment for this player
+			$db->sql_query('DELETE FROM ' . $equipment_table . ' WHERE player_id = ' . $player_id);
+
+			// Insert each equipped item
+			foreach ($data['equipped_items'] as $item)
+			{
+				$slot_type = isset($item['slot']['type']) ? $item['slot']['type'] : '';
+				if (empty($slot_type)) continue;
+
+				$icon_url = '';
+				if (isset($item['media']['id']))
+				{
+					// Item media ID can be used to construct icon URL later
+					$icon_url = 'https://render.worldofwarcraft.com/icons/56/' . ($item['media']['id'] ?? '') . '.jpg';
+				}
+
+				$sql_ary = array(
+					'player_id'   => $player_id,
+					'slot_type'   => $slot_type,
+					'item_id'     => isset($item['item']['id']) ? (int) $item['item']['id'] : 0,
+					'item_name'   => isset($item['name']) ? $item['name'] : '',
+					'item_level'  => isset($item['level']['value']) ? (int) $item['level']['value'] : 0,
+					'quality'     => isset($item['quality']['type']) ? $item['quality']['type'] : '',
+					'icon_url'    => $icon_url,
+					'last_update' => $now,
+				);
+
+				$db->sql_query('INSERT INTO ' . $equipment_table . ' ' . $db->sql_build_array('INSERT', $sql_ary));
+			}
+
+			$fetched++;
+		}
+
+		unset($api);
+
+		$remaining = count($players) - $fetched - $failed;
+		$message = sprintf('Fetched equipment for %d players.', $fetched);
+		if (!empty($errors))
+		{
+			$parts = array();
+			foreach ($errors as $code => $names)
+			{
+				$parts[] = sprintf('%s: %s', $this->error_label($code), implode(', ', $names));
+			}
+			$message .= sprintf(' %d failed [%s].', $failed, implode('; ', $parts));
+		}
+		if ($remaining > 0)
+		{
+			$message .= sprintf(' %d remaining.', $remaining);
+		}
+
+		return array('success' => true, 'message' => $message, 'count' => $fetched, 'errors' => $errors);
+	}
+
+	/**
 	 * Return a human-readable label for an API error code.
 	 *
 	 * @param int|string $code HTTP status code or error key

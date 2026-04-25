@@ -41,6 +41,12 @@ avathar_bbguild_wow_sync_portraits:
     requirements:
         guild_id: \d+
 
+avathar_bbguild_wow_sync_equipment:
+    path: /bbguild_wow/sync-equipment/{guild_id}
+    defaults: { _controller: avathar.bbguild_wow.portrait_controller:sync_equipment }
+    requirements:
+        guild_id: \d+
+
 avathar_bbguild_wow_sync_categories:
     path: /bbguild_wow/sync-categories/{guild_id}
     defaults: { _controller: avathar.bbguild_wow.achievement_sync_controller:sync_categories }

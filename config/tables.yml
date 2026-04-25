@@ -7,3 +7,4 @@ parameters:
     avathar.bbguild_wow.tables.bb_achievement_criteria: '%core.table_prefix%bb_achievement_criteria'
     avathar.bbguild_wow.tables.bb_relations_table: '%core.table_prefix%bb_relations_table'
     avathar.bbguild_wow.tables.bb_achievement_category: '%core.table_prefix%bb_achievement_category'
+    avathar.bbguild_wow.tables.bb_player_equipment: '%core.table_prefix%bb_player_equipment'
