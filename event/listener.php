@@ -40,6 +40,9 @@ class listener implements EventSubscriberInterface
 	/** @var string */
 	private $guild_wow_table;
 
+	/** @var string */
+	private $bb_players_table;
+
 	/**
 	 * @param config           $config
 	 * @param template         $template
@@ -47,8 +50,9 @@ class listener implements EventSubscriberInterface
 	 * @param request          $request
 	 * @param helper           $helper
 	 * @param string           $guild_wow_table
+	 * @param string           $bb_players_table
 	 */
-	public function __construct(config $config, template $template, driver_interface $db, request $request, helper $helper, $guild_wow_table)
+	public function __construct(config $config, template $template, driver_interface $db, request $request, helper $helper, $guild_wow_table, $bb_players_table)
 	{
 		$this->config = $config;
 		$this->template = $template;
@@ -56,6 +60,7 @@ class listener implements EventSubscriberInterface
 		$this->request = $request;
 		$this->helper = $helper;
 		$this->guild_wow_table = $guild_wow_table;
+		$this->bb_players_table = $bb_players_table;
 	}
 
 	/**
@@ -73,6 +78,7 @@ class listener implements EventSubscriberInterface
 			'avathar.bbguild.acp_listplayers_display'   => 'on_listplayers_display',
 			'avathar.bbguild.acp_config_display'        => 'on_config_display',
 			'avathar.bbguild.acp_config_submit'         => 'on_config_submit',
+			'avathar.bbguild.player_detail_display'     => 'on_player_detail_display',
 		);
 	}
 
@@ -289,6 +295,40 @@ class listener implements EventSubscriberInterface
 		$this->template->assign_vars(array(
 			'F_SHOWACHIEV'        => (int) $this->config['bbguild_show_achiev'],
 			'F_ACHIEV_HIDE_EMPTY' => (int) $this->config['bbguild_achiev_hide_empty'],
+		));
+	}
+
+	/**
+	 * Display WoW-specific data on the player detail page.
+	 * Currently shows the active specialization.
+	 *
+	 * @param \phpbb\event\data $event
+	 */
+	public function on_player_detail_display($event)
+	{
+		$player_id = (int) $event['player_id'];
+
+		$sql = 'SELECT game_id, player_spec
+			FROM ' . $this->bb_players_table . '
+			WHERE player_id = ' . $player_id;
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		if (!$row || $row['game_id'] !== 'wow')
+		{
+			return;
+		}
+
+		$spec = $row['player_spec'];
+		if (empty($spec) || $spec === 'N/A')
+		{
+			$spec = '';
+		}
+
+		$this->template->assign_vars(array(
+			'WOW_PLAYER_SPEC'   => $spec,
+			'S_WOW_PLAYER'      => true,
 		));
 	}
 

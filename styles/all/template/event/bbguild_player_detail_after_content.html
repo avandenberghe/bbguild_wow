@@ -1,0 +1,10 @@
+{% if S_WOW_PLAYER %}
+<div class="wow-player-detail">
+	{% if WOW_PLAYER_SPEC %}
+	<dl>
+		<dt>{{ lang('WOW_SPECIALIZATION') }}:</dt>
+		<dd>{{ WOW_PLAYER_SPEC }}</dd>
+	</dl>
+	{% endif %}
+</div>
+{% endif %}

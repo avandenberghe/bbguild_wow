@@ -89,4 +89,7 @@ $lang = array_merge(
 	'WOW_EDITION_CLASSIC_ERA'  => 'Classic Era',
 	'WOW_EDITION_CLASSIC_PROG' => 'Classic (Progression)',
 	'WOW_EDITION_CLASSIC_ANN'  => 'Classic (Anniversary)',
+
+	// Player detail page
+	'WOW_SPECIALIZATION'       => 'Specialization',
 ));

@@ -37,6 +37,7 @@ services:
             - '@request'
             - '@controller.helper'
             - '%avathar.bbguild_wow.tables.bb_guild_wow%'
+            - '%avathar.bbguild.tables.bb_players%'
         tags:
             - { name: event.listener }
 
