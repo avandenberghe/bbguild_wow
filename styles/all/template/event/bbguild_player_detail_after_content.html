@@ -1,6 +1,12 @@
 {% if S_WOW_PLAYER %}
 <div class="wow-player-detail">
 
+	{% if S_WOW_HAS_RENDER %}
+	<div class="wow-hero-render">
+		<img src="{{ WOW_PLAYER_RENDER }}" alt="{{ PLAYER_NAME }}" />
+	</div>
+	{% endif %}
+
 	{% if WOW_PLAYER_SPEC or S_WOW_HAS_EQUIPMENT %}
 	<fieldset>
 		<legend>{{ lang('WOW_CHARACTER_INFO') }}</legend>

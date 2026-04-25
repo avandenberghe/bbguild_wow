@@ -353,16 +353,23 @@ class wow_api implements game_api_interface
 				continue;
 			}
 
-			// Extract avatar URL from assets array
+			// Extract avatar and main render URLs from assets array
 			$avatar_url = '';
+			$render_url = '';
 			if (isset($data['assets']) && is_array($data['assets']))
 			{
 				foreach ($data['assets'] as $asset)
 				{
-					if (isset($asset['key']) && $asset['key'] === 'avatar' && isset($asset['value']))
+					if (isset($asset['key']) && isset($asset['value']))
 					{
-						$avatar_url = $asset['value'];
-						break;
+						if ($asset['key'] === 'avatar')
+						{
+							$avatar_url = $asset['value'];
+						}
+						elseif ($asset['key'] === 'main')
+						{
+							$render_url = $asset['value'];
+						}
 					}
 				}
 			}
@@ -371,11 +378,28 @@ class wow_api implements game_api_interface
 			{
 				// Download and cache portrait locally
 				$local_path = $this->download_portrait($avatar_url, $portrait_dir, $portrait_rel, (int) $player['player_id']);
-
 				$stored_url = !empty($local_path) ? $local_path : $avatar_url;
 
-				$db->sql_query('UPDATE ' . $this->bb_players_table .
-					" SET player_portrait_url = '" . $db->sql_escape($stored_url) . "'" .
+				// Download and cache full-body render
+				$render_rel = $upload_path . '/bbguild_wow/renders/';
+				$render_dir = $phpbb_root_path . $render_rel;
+				if (!is_dir($render_dir))
+				{
+					@mkdir($render_dir, 0755, true);
+				}
+				$stored_render = '';
+				if (!empty($render_url))
+				{
+					$render_local = $this->download_portrait($render_url, $render_dir, $render_rel, (int) $player['player_id']);
+					$stored_render = !empty($render_local) ? $render_local : $render_url;
+				}
+
+				$sql_update = "SET player_portrait_url = '" . $db->sql_escape($stored_url) . "'";
+				if (!empty($stored_render))
+				{
+					$sql_update .= ", player_render_url = '" . $db->sql_escape($stored_render) . "'";
+				}
+				$db->sql_query('UPDATE ' . $this->bb_players_table . ' ' . $sql_update .
 					' WHERE player_id = ' . (int) $player['player_id']);
 				$fetched++;
 			}

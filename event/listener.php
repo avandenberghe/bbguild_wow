@@ -311,7 +311,7 @@ class listener implements EventSubscriberInterface
 
 		$player_id = (int) $event['player_id'];
 
-		$sql = 'SELECT game_id, player_spec
+		$sql = 'SELECT game_id, player_spec, player_render_url
 			FROM ' . $this->bb_players_table . '
 			WHERE player_id = ' . $player_id;
 		$result = $this->db->sql_query($sql);
@@ -597,6 +597,8 @@ class listener implements EventSubscriberInterface
 			'S_WOW_HAS_PROFESSIONS' => !empty($professions_data),
 			'S_WOW_HAS_MPLUS'       => $mplus_rating > 0 || !empty($mplus_runs),
 			'S_WOW_HAS_PVP'         => !empty($pvp_data),
+			'WOW_PLAYER_RENDER'     => isset($row['player_render_url']) && !empty($row['player_render_url']) && $row['player_render_url'] !== 'N/A' ? $row['player_render_url'] : '',
+			'S_WOW_HAS_RENDER'      => isset($row['player_render_url']) && !empty($row['player_render_url']) && $row['player_render_url'] !== 'N/A',
 		));
 	}
 
