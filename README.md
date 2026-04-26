@@ -1,6 +1,9 @@
 # bbGuild - World of Warcraft
 
+
 Game plugin that adds World of Warcraft support to [bbGuild](https://github.com/avatharbe/bbguild).
+
+[![Tests](https://github.com/avatharbe/bbguild_wow/actions/workflows/tests.yml/badge.svg)](https://github.com/avatharbe/bbguild_wow/actions/workflows/tests.yml)
 
 ## Features
 
