@@ -7,13 +7,16 @@
 # 39 specs across 13 classes.
 #
 # USAGE
-#   ./fetch-spec-icons.sh --client-id ID --client-secret SECRET \
-#       [--region eu|us|kr|tw] [--out DIR] [--keep-jpg]
+#   1. Fill in CLIENT_ID and CLIENT_SECRET below with your Battle.net
+#      API client credentials (https://develop.battle.net/access/clients).
+#   2. Run:
+#        bash fetch-spec-icons.sh [--region eu|us|kr|tw] [--out DIR] [--keep-jpg]
 #
-#   # Or read credentials from a wowkeys.txt file with format:
-#   #   client_id=...
-#   #   client_secret=...
-#   ./fetch-spec-icons.sh --keys ../../wowkeys.txt
+#   Args also accept --client-id / --client-secret to override the inline
+#   values (useful for CI or one-off runs without editing the file).
+#
+# WARNING — DO NOT COMMIT CREDENTIALS. Edit your local copy only; do not
+# sync the filled-in version to the git repo dir.
 #
 # The script:
 #   1. Fetches an OAuth token via client_credentials grant
@@ -27,11 +30,15 @@
 
 set -euo pipefail
 
-# ---------------------- Argument parsing ----------------------------------
+# ---------------------- Credentials ---------------------------------------
+# Fill these in with your Battle.net client_id / client_secret.
+# DO NOT commit the filled-in version.
 
 CLIENT_ID=""
 CLIENT_SECRET=""
-KEYS_FILE=""
+
+# ---------------------- Argument parsing ----------------------------------
+
 REGION="eu"
 OUT_DIR=""
 KEEP_JPG=0
@@ -40,7 +47,6 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --client-id)     CLIENT_ID="$2"; shift 2 ;;
         --client-secret) CLIENT_SECRET="$2"; shift 2 ;;
-        --keys)          KEYS_FILE="$2"; shift 2 ;;
         --region)        REGION="$2"; shift 2 ;;
         --out)           OUT_DIR="$2"; shift 2 ;;
         --keep-jpg)      KEEP_JPG=1; shift ;;
@@ -60,23 +66,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PLUGIN_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 OUT_DIR="${OUT_DIR:-$PLUGIN_ROOT/images/spec_icons}"
 
-# Read credentials from --keys file if provided.
-if [[ -n "$KEYS_FILE" ]]; then
-    if [[ ! -f "$KEYS_FILE" ]]; then
-        echo "Keys file not found: $KEYS_FILE" >&2
-        exit 1
-    fi
-    # Source as shell vars (lines like client_id=... / client_secret=...)
-    while IFS='=' read -r key val; do
-        case "$key" in
-            client_id)     CLIENT_ID="$val" ;;
-            client_secret) CLIENT_SECRET="$val" ;;
-        esac
-    done < "$KEYS_FILE"
-fi
-
 if [[ -z "$CLIENT_ID" || -z "$CLIENT_SECRET" ]]; then
-    echo "Missing --client-id / --client-secret (or --keys FILE)" >&2
+    echo "CLIENT_ID and CLIENT_SECRET are empty." >&2
+    echo "Either fill them in at the top of the script, or pass" >&2
+    echo "    --client-id ID --client-secret SECRET" >&2
     exit 1
 fi
 
